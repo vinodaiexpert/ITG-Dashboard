@@ -1,0 +1,1944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WMS & Sales Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --navy: #1B3A6B; --blue: #2E6DB4; --blue-light: #EBF3FC;
+  --green: #0F6E56; --green-bg: #D5F5E3; --green-dk: #145A32;
+  --amber: #BA7517; --amber-bg: #FEF9E7; --amber-dk: #7D6608;
+  --red: #E24B4A; --red-bg: #FDEDEC; --red-dk: #922B21;
+  --teal: #0E6655; --teal-bg: #D1F2EB;
+  --gray: #f4f6f8; --border: #E0E6EE; --text: #1C2833; --muted: #6B7A8D;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #F0F3F7; color: var(--text); min-height: 100vh; }
+
+/* ── UPLOAD SCREEN ── */
+#upload-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; }
+.app-logo { font-size: 28px; font-weight: 700; color: var(--navy); margin-bottom: 6px; letter-spacing: -.5px; }
+.app-sub { font-size: 13px; color: var(--muted); margin-bottom: 40px; }
+.upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 680px; margin-bottom: 28px; }
+.drop-zone { background: #fff; border: 2px dashed var(--border); border-radius: 14px; padding: 32px 24px; text-align: center; cursor: pointer; transition: all .2s; position: relative; }
+.drop-zone:hover, .drop-zone.drag-over { border-color: var(--blue); background: var(--blue-light); }
+.drop-zone.has-file { border-color: var(--green); border-style: solid; background: var(--green-bg); }
+.drop-icon { font-size: 32px; margin-bottom: 10px; }
+.drop-label { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+.drop-hint { font-size: 11px; color: var(--muted); }
+.drop-filename { font-size: 12px; font-weight: 600; color: var(--green-dk); margin-top: 8px; word-break: break-all; }
+.drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.run-btn { background: var(--navy); color: #fff; border: none; border-radius: 10px; padding: 14px 40px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .2s; width: 100%; max-width: 680px; }
+.run-btn:hover:not(:disabled) { background: var(--blue); }
+.run-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── PROCESSING ── */
+#processing-screen { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+.spinner { width: 44px; height: 44px; border: 4px solid var(--blue-light); border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.proc-text { font-size: 14px; color: var(--muted); }
+
+/* ── DASHBOARD ── */
+#dashboard-screen { display: none; padding: 20px; max-width: 1200px; margin: 0 auto; }
+.dash-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.dash-title { font-size: 15px; font-weight: 600; color: var(--navy); }
+.dash-meta { font-size: 11px; color: var(--muted); }
+.back-btn { background: var(--gray); border: 1px solid var(--border); border-radius: 8px; padding: 7px 16px; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--text); margin-left: 16px; }
+.back-btn:hover { background: var(--blue-light); }
+.slbl { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.g4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 14px; }
+.g3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 14px; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.kpi { background: #fff; border-radius: 10px; padding: 14px 16px; border: 1px solid var(--border); }
+.kpi-l { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.kpi-v { font-size: 24px; font-weight: 600; color: var(--navy); line-height: 1; }
+.kpi-s { font-size: 11px; color: #aaa; margin-top: 3px; }
+.card { background: #fff; border-radius: 12px; padding: 16px; border: 1px solid var(--border); }
+.divider { font-size: 13px; font-weight: 600; color: var(--navy); margin: 20px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.pipe { display: flex; height: 11px; border-radius: 6px; overflow: hidden; margin: 10px 0 8px; }
+.leg-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+.leg { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.leg-sq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.row-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #F0F2F5; font-size: 12px; }
+.row-item:last-child { border-bottom: none; }
+.rl { display: flex; align-items: center; gap: 8px; }
+.rb { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+.pill { padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.pg { background: #D5F5E3; color: #145A32; }
+.pb { background: #EBF3FC; color: #185FA5; }
+.pa { background: #FEF9E7; color: #7D6608; }
+.pr { background: #FDEDEC; color: #922B21; }
+.br { height: 6px; background: #F0F2F5; border-radius: 3px; flex: 1; }
+.bf { height: 6px; border-radius: 3px; }
+.cr { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #F0F2F5; font-size: 12px; }
+.cr:last-child { border-bottom: none; }
+.pr2 { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid #F0F2F5; font-size: 11px; }
+.pr2:last-child { border-bottom: none; }
+.age-g { background: #D5F5E3; color: #145A32; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+.age-a { background: #FEF9E7; color: #7D6608; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+.age-r { background: #FDEDEC; color: #922B21; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+.alert-box { background: #FDEDEC; border-radius: 8px; padding: 9px 12px; font-size: 11px; color: #922B21; margin-top: 8px; }
+.pend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 10px; }
+.pend-cell { background: #F8FAFC; border-radius: 8px; padding: 9px 11px; }
+.pend-date { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+.pend-count { font-size: 18px; font-weight: 600; }
+.attn-card { background: #F8FAFC; border-radius: 10px; padding: 13px 15px; border: 1px solid var(--border); }
+.attn-title { font-size: 12px; font-weight: 600; color: var(--navy); margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+.attn-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.error-msg { background: #FDEDEC; border: 1px solid #F5C6C6; border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #922B21; margin-bottom: 16px; }
+.tab-bar { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+.tab-btn { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 18px 10px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; transition: all .15s; margin-bottom: -1px; }
+.tab-btn:hover { color: var(--navy); }
+.tab-btn.active { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.an-title { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 7px; }
+.an-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom:14px; }
+.an-grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom:14px; }
+.insight-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.insight-num { font-size: 28px; font-weight: 700; color: var(--navy); line-height: 1; margin-bottom: 2px; }
+.insight-lbl { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.insight-desc { font-size: 12px; color: var(--text); line-height: 1.5; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th { text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); background: #F8FAFC; }
+.tbl td { padding: 7px 8px; border-bottom: 1px solid #F4F6F8; color: var(--text); }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: #F8FAFC; }
+.tbl .num { text-align: right; font-weight: 500; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+@media(max-width:640px) { .upload-grid,.g4,.g3,.g2,.an-grid2,.an-grid3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<!-- UPLOAD -->
+<div id="upload-screen">
+  <div class="app-logo">📦 ITG Operations Dashboard</div>
+  <div class="app-sub">Connect your OneDrive folder or upload files manually.</div>
+
+  <!-- ── CONNECT FOLDER (OneDrive / local) ─────────────────────────────── -->
+  <div style="width:100%;max-width:680px;margin-bottom:20px">
+    <div style="background:#1B3A6B;border-radius:14px;padding:22px 26px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="font-size:36px;line-height:1">📁</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:3px">Connect your ITG Dashboard folder</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.55);line-height:1.5">
+            Reads <code style="background:rgba(255,255,255,0.15);padding:1px 5px;border-radius:3px">Orders*.xlsx</code> and
+            <code style="background:rgba(255,255,255,0.15);padding:1px 5px;border-radius:3px">InOrders*.xlsx</code> — always picks the latest file
+          </div>
+          <div id="folder-status" style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:4px">Chrome or Edge required · Works with OneDrive synced folders</div>
+        </div>
+        <button id="connect-folder-btn" onclick="connectFolder()" style="
+          background:#fff;color:#1B3A6B;border:none;border-radius:8px;
+          padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;
+          white-space:nowrap;flex-shrink:0">
+          🔗 Connect Folder
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Divider -->
+  <div style="width:100%;max-width:680px;display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <div style="flex:1;height:1px;background:#E0E6EE"></div>
+    <span style="font-size:11px;color:#aaa;font-weight:500">or upload files manually</span>
+    <div style="flex:1;height:1px;background:#E0E6EE"></div>
+  </div>
+
+  <div class="upload-grid" style="grid-template-columns:1fr 1fr">
+    <div class="drop-zone" id="wms-drop" ondragover="handleDrag(event,'wms-drop')" ondragleave="handleDragLeave('wms-drop')" ondrop="handleDrop(event,'wms')">
+      <input type="file" accept=".xlsx,.xls" onchange="handleFile(event,'wms')">
+      <div class="drop-icon">🏭</div>
+      <div class="drop-label">WMS Orders File <span style="font-size:10px;color:#aaa;font-weight:400">(optional)</span></div>
+      <div class="drop-hint">Orders_xx.xlsx — contains WMS order data</div>
+      <div class="drop-filename" id="wms-fname"></div>
+    </div>
+    <div class="drop-zone" id="po-drop" ondragover="handleDrag(event,'po-drop')" ondragleave="handleDragLeave('po-drop')" ondrop="handleDrop(event,'po')">
+      <input type="file" accept=".xlsx,.xls" onchange="handleFile(event,'po')">
+      <div class="drop-icon">📦</div>
+      <div class="drop-label">PO Inbound File <span style="font-size:10px;color:#aaa;font-weight:400">(optional)</span></div>
+      <div class="drop-hint">InOrders_xx.xlsx — purchase order status / stock</div>
+      <div class="drop-filename" id="po-fname"></div>
+    </div>
+  </div>
+
+  <button class="run-btn" id="run-btn" disabled onclick="runDashboard()">Generate Dashboard</button>
+  <div id="upload-error"></div>
+</div>
+
+<!-- PROCESSING -->
+<div id="processing-screen">
+  <div class="spinner"></div>
+  <div class="proc-text" id="proc-text">Reading files...</div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard-screen">
+  <div class="dash-topbar">
+    <div>
+      <div class="dash-title" id="dash-title">Management Overview — Shopify Orders</div>
+      <div class="dash-meta">Shopify → ERP → WMS &nbsp;|&nbsp; Business Unit: DK &nbsp;|&nbsp; D-1 Report</div>
+      <div id="last-updated" style="font-size:10px;color:#aaa;margin-top:2px"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="refresh-btn" onclick="refreshFromFolder()" style="display:none;
+        background:#1B3A6B;color:#fff;border:none;border-radius:8px;
+        padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer">
+        🔄 Refresh
+      </button>
+      <button class="back-btn" onclick="goBack()">↩ Upload new files</button>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('tab-main',this)">📊 Outbound</button>
+    <button class="tab-btn" onclick="switchTab('tab-po',this)">📦 Inbound PO</button>
+  </div>
+  <div id="tab-main" class="tab-panel active"><div id="dash-content"></div></div>
+  <div id="tab-po" class="tab-panel"><div id="po-content"></div></div>
+  <div id="tab-analysis" class="tab-panel" style="display:none"><div id="analysis-content"></div></div>
+  <div id="tab-returns" class="tab-panel" style="display:none"><div id="returns-content"></div></div>
+</div>
+
+<script>
+let files = { wms: null, po: null };
+let charts = [];
+let _wmsRaw = null; // stored globally so order type selector can re-process without re-uploading
+const FULFILLED = ['Collected', 'CustomsCleared']; // treated as shipped
+
+// Global safe chart creator — destroys existing Chart.js instance before creating new
+function safeChart(id, config) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const existing = Chart.getChart(el);
+  if (existing) existing.destroy();
+  const c = new Chart(el, config);
+  charts.push(c);
+}
+
+function handleFile(e, type) {
+  const file = e.target.files[0];
+  if (!file) return;
+  files[type] = file;
+  document.getElementById(type + '-fname').textContent = '✓ ' + file.name;
+  document.getElementById(type + '-drop').classList.add('has-file');
+  checkReady();
+}
+
+function handleDrag(e, id) { e.preventDefault(); document.getElementById(id).classList.add('drag-over'); }
+function handleDragLeave(id) { document.getElementById(id).classList.remove('drag-over'); }
+function handleDrop(e, type) {
+  e.preventDefault();
+  const id = type + '-drop';
+  document.getElementById(id).classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  files[type] = file;
+  document.getElementById(type + '-fname').textContent = '✓ ' + file.name;
+  document.getElementById(id).classList.add('has-file');
+  checkReady();
+}
+
+function checkReady() {
+  const any = files.wms || files.po;
+  document.getElementById('run-btn').disabled = !any;
+}
+
+function setProc(t) { document.getElementById('proc-text').textContent = t; }
+
+function show(id) {
+  ['upload-screen','processing-screen','dashboard-screen'].forEach(s => {
+    document.getElementById(s).style.display = s === id ? (id === 'upload-screen' || id === 'processing-screen' ? 'flex' : 'block') : 'none';
+  });
+}
+
+function goBack() {
+  charts.forEach(c => c.destroy()); charts = [];
+  show('upload-screen');
+}
+
+async function readExcel(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        // Pick the sheet with the most real data — files sometimes have empty
+        // helper sheets (Sheet1/Sheet2) before the actual 'Data' sheet.
+        let best = null, bestScore = -1;
+        wb.SheetNames.forEach(name => {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
+          // Score = row count, but prefer a sheet literally named 'Data'
+          let score = rows.length;
+          // Penalise sheets whose headers are mostly 'Unnamed'/'__EMPTY' (junk sheets)
+          if (rows.length > 0) {
+            const keys = Object.keys(rows[0]);
+            const named = keys.filter(k => k && !/^(__EMPTY|Unnamed)/i.test(k)).length;
+            if (named < 2) score = 0;                 // junk sheet
+          }
+          if (/^data$/i.test(name) && rows.length > 0) score += 100000; // strongly prefer 'Data'
+          if (score > bestScore) { bestScore = score; best = rows; }
+        });
+        res(best || []);
+      } catch(err) { rej(err); }
+    };
+    reader.onerror = rej;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function runDashboard() {
+  show('processing-screen');
+  document.getElementById('upload-error').innerHTML = '';
+
+  try {
+    // Read whichever files were provided
+    let wmsRaw = null, poRaw = null;
+
+    if (files.wms) {
+      setProc('Reading WMS Outbound file...');
+      wmsRaw = await readExcel(files.wms);
+    }
+    if (files.po) {
+      setProc('Reading PO Inbound file...');
+      poRaw = await readExcel(files.po);
+    }
+
+    setProc('Building dashboard...');
+    await new Promise(r => setTimeout(r, 300));
+
+    // ── Outbound tab — WMS (ALL EXISTING LOGIC UNTOUCHED) ────────────────────
+    // Store globally for order type switching
+    _wmsRaw = wmsRaw;
+
+    if (wmsRaw) {
+      renderOutboundWithTypeSelector(wmsRaw);
+    } else {
+      document.getElementById('dash-content').innerHTML =
+        '<div style="padding:50px;text-align:center;color:#aaa;font-size:13px">Upload a WMS Outbound file to see the outbound dashboard.</div>';
+    }
+
+    // ── Inbound PO tab — NEW ──────────────────────────────────────────────────
+    if (poRaw) {
+      setProc('Processing PO Inbound data...');
+      const poData = processPO(poRaw);
+      renderPO(poData);
+    } else {
+      document.getElementById('po-content').innerHTML =
+        '<div style="padding:50px;text-align:center;color:#aaa;font-size:13px">Upload a PO Inbound file to see the inbound PO status.</div>';
+    }
+
+    show('dashboard-screen');
+
+  } catch(err) {
+    show('upload-screen');
+    document.getElementById('upload-error').innerHTML =
+      `<div style="margin-top:14px;background:#FDEDEC;border-radius:10px;padding:12px 16px;font-size:12px;color:#922B21;max-width:680px">
+        ⚠️ Error processing files: ${err.message}. Please check you uploaded the correct Excel files.
+      </div>`;
+  }
+}
+
+// Empty fallbacks so tabs can render even when one file type is missing
+function emptyWms() {
+  return { totalActive: 0, collected: 0, pending: 0, onHoldCount: 0, fulfilmentPct: '0.0', totalUnits: 0,
+    statusCounts: {}, countries: [], pendingDates: [], criticalPending: [], cancCount: 0,
+    uniqueCountries: 0, reportDateStr: '—', topCountries: [], reportDate: new Date() };
+}
+function emptySales() {
+  return { totalOrders: 0, totalUnits: 0, totalRevenue: 0, avgOrder: 0,
+    multiItems: 0, singleItems: 0, multiPct: '0.0', singlePct: '0.0',
+    topItems: [], topPairs: [], basketLabels: ['1','2','3','4','5+'], basketData: [0,0,0,0,0],
+    uniqueSkus: 0 };
+}
+
+function processWMS(raw, orderType = 'Shopify Order') {
+  // Filter by order type — default is 'Shopify Order' (B2C). Pass different
+  // type for B2B (Prebook etc.). EXISTING SHOPIFY LOGIC IS UNTOUCHED.
+  const shopify = raw.filter(r => (r['Order type'] || '').toString().trim() === orderType);
+  // Exclude Cancelled and On Hold
+  const active = shopify.filter(r => (r['Status'] || '').toString().trim() !== 'Cancelled');
+  // Exclude blank Order ID
+  const clean = active.filter(r => r['Order ID'] && r['Order ID'].toString().trim() !== '');
+
+  // D-1 logic: report date = latest LOCAL date found in the data
+  let maxDateMs = 0;
+  clean.forEach(r => {
+    const d = r['Created'] ? new Date(r['Created']) : null;
+    if (d && !isNaN(d) && d.getTime() > maxDateMs) maxDateMs = d.getTime();
+  });
+  const maxRaw     = new Date(maxDateMs || Date.now());
+  // Use LOCAL date components — avoids UTC shift (critical for Dubai UTC+4)
+  const reportDate = new Date(maxRaw.getFullYear(), maxRaw.getMonth(), maxRaw.getDate());
+
+  // Status breakdown
+  const statusCounts = {};
+  clean.forEach(r => {
+    const s = (r['Status'] || '').toString().trim();
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+  });
+
+  const totalActive   = clean.length;
+  const collected     = clean.filter(r => FULFILLED.includes(r['Status'])).length;
+  const pending       = clean.filter(r => !FULFILLED.includes(r['Status']));
+  const fulfilmentPct = totalActive > 0 ? (collected / totalActive * 100).toFixed(1) : '0.0';
+  const totalUnits    = clean.reduce((s, r) => s + (parseFloat(r['Ordered']) || 0), 0);
+
+  // Country breakdown
+  const countryMap = {};
+  clean.forEach(r => {
+    const c = (r['Country'] || 'Unknown').toString().trim();
+    if (!countryMap[c]) countryMap[c] = { total: 0, collected: 0 };
+    countryMap[c].total++;
+    if (FULFILLED.includes((r['Status'] || ''))) countryMap[c].collected++;
+  });
+  const countries = Object.entries(countryMap)
+    .map(([name, v]) => ({
+      name, orders: v.total, shipped: v.collected,
+      pending: v.total - v.collected,
+      pct: v.total > 0 ? (v.collected / v.total * 100).toFixed(1) : '0.0'
+    }))
+    .sort((a, b) => b.orders - a.orders);
+
+  // Pending by creation date — use LOCAL date (not UTC) to avoid timezone shift
+  const pendByDate = {};
+  pending.forEach(r => {
+    const d = r['Created'] ? new Date(r['Created']) : null;
+    if (!d || isNaN(d)) return;
+    // Build key from local date components so Dubai UTC+4 doesn't shift overnight orders to previous day
+    const key = d.getFullYear() + '-' +
+                String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                String(d.getDate()).padStart(2, '0');
+    if (!pendByDate[key]) pendByDate[key] = { orders: 0, units: 0 };
+    pendByDate[key].orders++;
+    pendByDate[key].units += parseFloat(r['Ordered']) || 0;
+  });
+  const pendingDates = Object.entries(pendByDate)
+    .map(([date, v]) => {
+      // Parse the local-date key back into year/month/day components
+      const [yr, mo, dy] = date.split('-').map(Number);
+      const dDay  = new Date(yr, mo - 1, dy);       // local midnight
+      const days  = Math.round((reportDate - dDay) / 86400000);
+      const label = dDay.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      return { date, label, orders: v.orders, units: v.units, days };
+    })
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const criticalPending = pendingDates.filter(p => p.days >= 3);
+  const cancCount = raw.filter(r =>
+    (r['Order type'] || '') === 'Shopify Order' && (r['Status'] || '') === 'Cancelled').length;
+
+  const uniqueCountries = countries.length;
+  const reportDateStr = reportDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  // D-1 label: report date is yesterday relative to today
+  const topCountries = countries.slice(0, 9);
+
+  const onHoldCount = clean.filter(r => (r['Status']||'').trim() === 'On Hold').length;
+  // Store raw rows for B2B detail table (used by buildB2BOrderTable)
+  const _b2bRows = clean;
+
+  return {
+    totalActive, collected, pending: pending.length, onHoldCount, fulfilmentPct, totalUnits,
+    statusCounts, countries, pendingDates, criticalPending, cancCount,
+    uniqueCountries, reportDateStr, topCountries, reportDate, _b2bRows
+  };
+}
+
+function processSales(raw) {
+  // Filter items only if Type column exists
+  const items = raw.filter(r => {
+    if ('Type' in r) return (r['Type'] || '').toString().trim() === 'Item';
+    return true;
+  });
+
+  const totalOrders  = [...new Set(items.map(r => r['Document No.']).filter(Boolean))].length;
+  const totalUnits   = items.reduce((s, r) => s + (parseFloat(r['Quantity']) || 0), 0);
+  const totalRev     = items.reduce((s, r) => s + (parseFloat(r['Line Amount Incl. VAT']) || 0), 0);
+  const avgOrder     = totalOrders > 0 ? totalRev / totalOrders : 0;
+
+  // Group items per order
+  const orderMap = {};
+  items.forEach(r => {
+    const doc = r['Document No.'];
+    if (!doc) return;
+    if (!orderMap[doc]) orderMap[doc] = [];
+    orderMap[doc].push((r['Description'] || '').toString().trim().toUpperCase());
+  });
+
+  const orderList  = Object.values(orderMap);
+  const multiItems = orderList.filter(o => new Set(o).size >= 2);
+  const singleItems= orderList.filter(o => new Set(o).size === 1);
+  const multiPct   = totalOrders > 0 ? (multiItems.length / totalOrders * 100).toFixed(1) : '0.0';
+  const singlePct  = totalOrders > 0 ? (singleItems.length / totalOrders * 100).toFixed(1) : '0.0';
+
+  // Top items
+  const itemMap = {};
+  items.forEach(r => {
+    const d = (r['Description'] || '').toString().trim();
+    if (!d) return;
+    if (!itemMap[d]) itemMap[d] = { units: 0, orders: new Set(), revenue: 0 };
+    itemMap[d].units += parseFloat(r['Quantity']) || 0;
+    itemMap[d].orders.add(r['Document No.']);
+    itemMap[d].revenue += parseFloat(r['Line Amount Incl. VAT']) || 0;
+  });
+  const topItems = Object.entries(itemMap)
+    .map(([desc, v]) => ({ desc, units: v.units, orders: v.orders.size, revenue: v.revenue }))
+    .sort((a, b) => b.units - a.units)
+    .slice(0, 6);
+
+  // Pairs
+  const pairMap = {};
+  multiItems.forEach(order => {
+    const unique = [...new Set(order)].sort();
+    for (let i = 0; i < unique.length; i++)
+      for (let j = i+1; j < unique.length; j++) {
+        const key = unique[i] + '|||' + unique[j];
+        pairMap[key] = (pairMap[key] || 0) + 1;
+      }
+  });
+  const topPairs = Object.entries(pairMap)
+    .map(([k, v]) => { const [a,b] = k.split('|||'); return { a: toTitle(a), b: toTitle(b), count: v }; })
+    .sort((a,b) => b.count - a.count)
+    .slice(0, 6);
+
+  // Basket distribution
+  const basketMap = {};
+  orderList.forEach(o => {
+    const n = new Set(o).size;
+    const bucket = n >= 5 ? '5+' : String(n);
+    basketMap[bucket] = (basketMap[bucket] || 0) + 1;
+  });
+  const basketLabels = ['1','2','3','4','5+'];
+  const basketData   = basketLabels.map(l => basketMap[l] || 0);
+
+  return {
+    totalOrders, totalUnits, totalRev, avgOrder,
+    multiItems: multiItems.length, singleItems: singleItems.length,
+    multiPct, singlePct, topItems, topPairs, basketLabels, basketData,
+    uniqueSkus: Object.keys(itemMap).length
+  };
+}
+
+function toTitle(s) {
+  return s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function fmtDate(d) {
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function renderDashboard(wms, returns, orderType = 'Shopify Order') {
+  // Update title
+  const typeLabel = orderType === 'Shopify Order' ? 'Shopify Orders' : orderType + ' (B2B)';
+  document.getElementById('dash-title').textContent =
+    `Management Overview — ${typeLabel} · as of ${wms.reportDateStr}`;
+
+  // Write into inner div if type selector is active, else directly into dash-content
+  const inner = document.getElementById('wms-dashboard-inner') || document.getElementById('dash-content');
+  inner.innerHTML = buildHTML(wms, returns, orderType);
+
+  // Country chart removed — replaced with country volume table
+}
+
+function buildPipeline(wms) {
+  const s = wms.statusCounts;
+  const total = wms.totalActive;
+  const seg = (color, key, opacity) => {
+    const n = s[key] || 0;
+    return n > 0 ? `<div style="background:${color};flex:${n};${opacity?'opacity:'+opacity:''}"></div>` : '';
+  };
+  return `
+    <div class="pipe">
+      ${seg('#1D9E75','Collected')} ${seg('#9FE1CB','Picked')} ${seg('#85B7EB','Allocated')}
+      ${seg('#378ADD','PackedNotShipped')} ${seg('#EF9F27','Open')}
+      ${seg('#1D9E75','CustomsCleared',0.6)} ${seg('#E24B4A','CustomsPendingForDocuments')}
+    </div>
+    <div class="leg-row">
+      ${Object.entries(wms.statusCounts).map(([st, n]) => {
+        const colors = { Collected:'#1D9E75', Picked:'#9FE1CB', Allocated:'#85B7EB',
+          PackedNotShipped:'#378ADD', Open:'#EF9F27', CustomsCleared:'#1D9E75',
+          CustomsPendingForDocuments:'#E24B4A', 'On Hold':'#8E44AD' };
+        const labels = { PackedNotShipped:'Packed Not Shipped', CustomsPendingForDocuments:'Customs Pending', CustomsCleared:'Customs Cleared' };
+        const col = colors[st] || '#aaa';
+        const lbl = labels[st] || st;
+        return `<span class="leg"><span class="leg-sq" style="background:${col}"></span>${lbl} — ${n} (${(n/total*100).toFixed(1)}%)</span>`;
+      }).join('')}
+    </div>`;
+}
+
+function buildPendingDates(wms) {
+  if (!wms.pendingDates.length) return '<div style="font-size:12px;color:#aaa;padding:10px 0">No pending orders</div>';
+  const cells = wms.pendingDates.map(p => {
+    let ageClass = 'age-g', emoji = '🟢', ageColor = '#145A32';
+    if (p.days >= 3)      { ageClass = 'age-r'; emoji = '🔴'; ageColor = '#E24B4A'; }
+    else if (p.days >= 1) { ageClass = 'age-a'; emoji = '🟡'; ageColor = '#BA7517'; }
+    // 0 days = created on report date
+    // Check if report date is today or yesterday to label correctly
+    const todayLocal = new Date();
+    const todayMidnight = new Date(todayLocal.getFullYear(), todayLocal.getMonth(), todayLocal.getDate());
+    const reportDate = wms.reportDate;
+    const isToday = reportDate.getTime() === todayMidnight.getTime();
+    const sameDay = p.days <= 0;
+    const label = sameDay
+      ? (isToday ? `Today 🟢` : `Yesterday 🟢`)
+      : `${p.days} day${p.days > 1 ? 's' : ''} ${emoji}`;
+    return `<div class="pend-cell">
+      <div class="pend-date">${p.label}</div>
+      <div class="pend-count" style="color:${ageColor}">${p.orders}</div>
+      <span class="${ageClass}">${label}</span>
+    </div>`;
+  });
+  // Add total cell
+  cells.push(`<div class="pend-cell">
+    <div class="pend-date">Total pending</div>
+    <div class="pend-count">${wms.pending}</div>
+    <span style="font-size:10px;color:#aaa">${wms.criticalPending.length > 0 ? wms.criticalPending.reduce((s,p)=>s+p.orders,0)+' critical' : 'All recent'}</span>
+  </div>`);
+
+  const alertHtml = wms.criticalPending.length > 0
+    ? `<div class="alert-box">⚠️ <strong>${wms.criticalPending.reduce((s,p)=>s+p.orders,0)} orders are 3+ days old</strong> — requires immediate warehouse escalation.</div>`
+    : `<div style="background:#D5F5E3;border-radius:8px;padding:9px 12px;font-size:11px;color:#145A32;margin-top:8px">✅ All pending orders are recent — no overdue items.</div>`;
+
+  return `<div class="pend-grid">${cells.join('')}</div>${alertHtml}`;
+}
+
+function buildCountryRows(wms) {
+  return wms.countries.map(c => {
+    const pct = parseFloat(c.pct);
+    const barColor = pct >= 70 ? '#1D9E75' : pct >= 40 ? '#EF9F27' : '#E24B4A';
+    const txtColor = pct >= 70 ? '#145A32' : pct >= 40 ? '#BA7517' : '#922B21';
+    return `<div class="cr">
+      <span style="flex:1;font-size:12px">${c.name}</span>
+      <span style="color:#aaa;font-size:10px;min-width:50px;text-align:right">${c.orders} orders</span>
+      <div class="br" style="width:62px"><div class="bf" style="background:${barColor};width:${Math.min(pct,100)}%"></div></div>
+      <span style="min-width:38px;text-align:right;font-weight:600;font-size:12px;color:${txtColor}">${c.pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+function buildTopItems(sales) {
+  const goldColors = ['#FEF9E7:#B7860B','#F5F5F5:#707070','#FDF0E6:#7D4010'];
+  return sales.topItems.map((item, i) => {
+    const [bg, col] = (goldColors[i] || '#F0F2F5:#6B7A8D').split(':');
+    const pillClass = i < 3 ? 'pg' : 'pb';
+    return `<div class="row-item">
+      <div class="rl">
+        <span class="rb" style="background:${bg};color:${col}">${i+1}</span>
+        <span style="font-size:12px">${toTitle(item.desc)}</span>
+      </div>
+      <span class="pill ${pillClass}">${Math.round(item.units)} units</span>
+    </div>`;
+  }).join('');
+}
+
+function buildPairs(sales) {
+  if (!sales.topPairs.length) return '<div style="font-size:12px;color:#aaa;padding:10px 0">Not enough multi-item orders for pair analysis.</div>';
+  return sales.topPairs.map(p => {
+    const color = p.count >= 3 ? '#1D9E75' : '#EF9F27';
+    const dots  = p.count >= 3 ? '●●●' : '●●○';
+    const cls   = p.count >= 3 ? 'pg' : 'pa';
+    return `<div class="pr2">
+      <span style="color:${color};letter-spacing:1px;font-size:11px">${dots}</span>
+      <span style="flex:1;color:#1C2833">${p.a} + ${p.b}</span>
+      <span class="pill ${cls}">${p.count}x</span>
+    </div>`;
+  }).join('');
+}
+
+function buildAttention(wms, returns) {
+  const items = [];
+
+  const critical = wms.criticalPending || [];
+  if (critical.length > 0) {
+    const maxDays = Math.max(...critical.map(p => p.days));
+    const totalCritOrders = critical.reduce((s,p) => s+p.orders, 0);
+    items.push({ icon: '⏰', title: `${totalCritOrders} orders — up to ${maxDays} days pending`,
+      desc: `Orders from ${critical.map(p=>p.label).join(', ')} still not collected. Needs immediate warehouse escalation.` });
+  } else if (wms.pending > 0) {
+    items.push({ icon: '✅', title: 'All pending orders are recent',
+      desc: `${wms.pending} pending orders — all created recently, no overdue items.` });
+  }
+
+  const swissRow = (wms.countries || []).find(c => c.name === 'Switzerland' || c.name === 'Schweiz');
+  if (swissRow && parseFloat(swissRow.pct) < 20) {
+    items.push({ icon: '🌍', title: `Switzerland — ${swissRow.pct}% fulfilment`,
+      desc: `${swissRow.orders} orders with low fulfilment. COO for articles must be finalised for 3rd country customs clearance.` });
+  }
+
+  // Returns-based attention
+  if (returns) {
+    const pendingReturn = Math.round(returns.totalToReturn - returns.totalReturned);
+    if (pendingReturn > 0) {
+      items.push({ icon: '↩', title: `${pendingReturn} units pending physical return`,
+        desc: `${returns.totalReturns} return orders raised. Follow up on units not yet received back in the warehouse.` });
+    }
+    const topRetCtry = (returns.countries || [])[0];
+    if (topRetCtry) {
+      items.push({ icon: '📦', title: `${topRetCtry.country} — highest returns`,
+        desc: `${topRetCtry.returns} return orders (${Math.round(topRetCtry.toReturn)} units). Worth reviewing sizing or product quality for this market.` });
+    }
+  }
+
+  while (items.length < 3) {
+    if (wms.onHoldCount > 0) {
+      items.push({ icon: '⏸️', title: `${wms.onHoldCount} order${wms.onHoldCount>1?'s':''} on hold`,
+        desc: `${wms.onHoldCount} order${wms.onHoldCount>1?'s are':' is'} currently on hold in the WMS. Review and release to continue processing.` });
+    } else {
+      items.push({ icon: '📋', title: 'Operations running normally',
+        desc: 'No additional attention items flagged for this report.' });
+    }
+  }
+
+  return items.slice(0,3).map(it => `
+    <div class="attn-card">
+      <div class="attn-title"><span style="font-size:15px">${it.icon}</span><span>${it.title}</span></div>
+      <div class="attn-desc">${it.desc}</div>
+    </div>`).join('');
+}
+
+function buildHTML(wms, returns, orderType = 'Shopify Order') {
+  const isB2B = orderType !== 'Shopify Order';
+  const typeLabel = isB2B ? orderType + ' (B2B)' : 'Shopify (B2C)';
+
+  return `
+  <!-- WMS KPIs -->
+  <p class="slbl">🏭 WMS Status — ${typeLabel}</p>
+  <div class="g4" style="grid-template-columns:repeat(5,1fr)">
+    <div class="kpi"><div class="kpi-l">Active orders</div><div class="kpi-v">${wms.totalActive.toLocaleString()}</div><div class="kpi-s">${typeLabel} orders</div></div>
+    <div class="kpi"><div class="kpi-l">Fulfilment rate</div><div class="kpi-v" style="color:${parseFloat(wms.fulfilmentPct)>=80?'#0F6E56':'#BA7517'}">${wms.fulfilmentPct}%</div><div class="kpi-s">${wms.collected.toLocaleString()} of ${wms.totalActive.toLocaleString()} shipped</div></div>
+    <div class="kpi"><div class="kpi-l">Pending</div><div class="kpi-v" style="color:#BA7517">${wms.pending}</div><div class="kpi-s">Awaiting action</div></div>
+    <div class="kpi"><div class="kpi-l">On Hold</div><div class="kpi-v" style="color:${wms.onHoldCount>0?'#6C3483':'#aaa'}">${wms.onHoldCount || 0}</div><div class="kpi-s">${wms.onHoldCount>0?'Held — action required':'No orders on hold'}</div></div>
+    <div class="kpi"><div class="kpi-l">Countries</div><div class="kpi-v">${wms.uniqueCountries}</div><div class="kpi-s">Active markets</div></div>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="card" style="margin-bottom:14px">
+    <p class="slbl">Order fulfilment pipeline</p>
+    ${buildPipeline(wms)}
+  </div>
+
+  <!-- Pending + Country fulfilment -->
+  <div class="g2">
+    <div class="card">
+      <p class="slbl">⏱ Pending orders — creation & days pending</p>
+      ${buildPendingDates(wms)}
+    </div>
+    <div class="card">
+      <p class="slbl">Country fulfilment</p>
+      ${buildCountryRows(wms)}
+    </div>
+  </div>
+
+  <!-- Country volume TABLE — only shown for B2C (Shopify); B2B has detail table instead -->
+  ${!isB2B ? `<div class="card" style="margin-bottom:14px">
+    <p class="slbl">Order volume by country</p>
+    ${buildCountryVolumeTable(wms)}
+  </div>` : ''}
+
+  <!-- B2B Order Detail — only shown for non-Shopify order types -->
+  ${isB2B ? buildB2BOrderTable(wms) : ''}
+
+  ${returns ? buildReturnsSummary(returns) : ''}
+
+  <!-- Attention -->
+  <div class="divider">⚠️ Attention items</div>
+  <div class="g3">${buildAttention(wms, returns)}</div>
+  `;
+}
+
+// ── Country volume TABLE (replaces the bar chart) ────────────────────────────
+function buildCountryVolumeTable(wms) {
+  if (!wms.countries || !wms.countries.length) return '<p style="font-size:12px;color:#aaa">No country data.</p>';
+  const rows = wms.countries.map((c, i) => {
+    const bg = i % 2 === 0 ? '#fff' : '#F8FAFC';
+    const pct = parseFloat(c.pct || 0);
+    const pctCol = pct >= 70 ? '#145A32' : pct >= 40 ? '#BA7517' : '#922B21';
+    const pctBg  = pct >= 70 ? '#D5F5E3' : pct >= 40 ? '#FEF9E7' : '#FDEDEC';
+    const barW   = Math.min(pct, 100).toFixed(0);
+    return `<tr style="background:${bg}">
+      <td style="padding:7px 10px;font-size:12px;font-weight:500">${c.name}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right">${c.orders}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;color:#145A32;font-weight:500">${c.shipped}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;color:${c.pending>0?'#BA7517':'#aaa'}">${c.pending}</td>
+      <td style="padding:7px 10px;min-width:140px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;background:#F0F2F5;border-radius:3px;height:7px">
+            <div style="background:${pctCol};width:${barW}%;height:7px;border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px;font-weight:600;color:${pctCol};background:${pctBg};padding:1px 7px;border-radius:20px;min-width:44px;text-align:center">${pct.toFixed(1)}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="background:#F8FAFC;border-bottom:1px solid #E0E6EE">
+          <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Country</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Orders</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Shipped</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Pending</th>
+          <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Fulfilment</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+// ── B2B Order Detail table — shown only for non-Shopify order types ───────────
+function buildB2BOrderTable(wms) {
+  if (!wms._b2bRows || !wms._b2bRows.length) return '';
+  const statusColor = (s) => {
+    if (s === 'Collected' || s === 'CustomsCleared') return { bg:'#D5F5E3', txt:'#145A32' };
+    if (s === 'PackedNotShipped')  return { bg:'#EBF3FC', txt:'#185FA5' };
+    if (s === 'Allocated')         return { bg:'#EBF3FC', txt:'#185FA5' };
+    if (s === 'Picked')            return { bg:'#D1F2EB', txt:'#0E6655' };
+    if (s === 'Open')              return { bg:'#FEF9E7', txt:'#7D6608' };
+    if (s === 'On Hold')           return { bg:'#E8DAEF', txt:'#6C3483' };
+    if (s === 'Cancelled')         return { bg:'#FDEDEC', txt:'#922B21' };
+    return { bg:'#F4F6F8', txt:'#6B7A8D' };
+  };
+
+  const rows = wms._b2bRows.map((r, i) => {
+    const sc  = statusColor((r['Status']||'').trim());
+    const bg  = i % 2 === 0 ? '#fff' : '#F8FAFC';
+    const fmt = v => { const n = parseFloat(v) || 0; return n > 0 ? n.toLocaleString() : '<span style="color:#ccc">—</span>'; };
+    return `<tr style="background:${bg}">
+      <td style="padding:7px 10px;font-size:11px"><span style="background:${sc.bg};color:${sc.txt};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap">${r['Status']||'—'}</span></td>
+      <td style="padding:7px 10px;font-size:11px;color:#6B7A8D">${r['Order classes']||'—'}</td>
+      <td style="padding:7px 10px;font-size:11px;color:#6B7A8D">${r['Order type']||'—'}</td>
+      <td style="padding:7px 10px;font-size:12px;font-weight:500;white-space:nowrap">${r['Order number']||'—'}</td>
+      <td style="padding:7px 10px;font-size:12px">${r['Country']||'—'}</td>
+      <td style="padding:7px 10px;font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['Customer']||'—'}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right">${fmt(r['Ordered'])}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;color:#185FA5">${fmt(r['Alloc.'])}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;color:#0E6655">${fmt(r['Picked'])}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;color:#145A32">${fmt(r['Packed'])}</td>
+    </tr>`;
+  }).join('');
+
+  const total_ord = wms._b2bRows.reduce((s,r)=>s+(parseFloat(r['Ordered'])||0),0);
+  const total_alc = wms._b2bRows.reduce((s,r)=>s+(parseFloat(r['Alloc.'])||0),0);
+  const total_pck = wms._b2bRows.reduce((s,r)=>s+(parseFloat(r['Picked'])||0),0);
+  const total_pad = wms._b2bRows.reduce((s,r)=>s+(parseFloat(r['Packed'])||0),0);
+
+  return `
+  <div class="divider">📋 B2B Order Detail</div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#F8FAFC;border-bottom:1px solid #E0E6EE">
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Status</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Order Class</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Order Type</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Order No.</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Country</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Customer</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Ordered</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Allocated</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Picked</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Packed</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr style="background:#1B3A6B">
+            <td colspan="6" style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff">TOTAL</td>
+            <td style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff;text-align:right">${Math.round(total_ord).toLocaleString()}</td>
+            <td style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff;text-align:right">${Math.round(total_alc).toLocaleString()}</td>
+            <td style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff;text-align:right">${Math.round(total_pck).toLocaleString()}</td>
+            <td style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff;text-align:right">${Math.round(total_pad).toLocaleString()}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>`;
+}
+
+// Returns summary block shown on the main dashboard under WMS status
+function buildReturnsSummary(ret) {
+  const pending = ret.totalToReturn - ret.totalReturned;
+  const statusColor = (s) => {
+    if (s === 'Returned')   return '#1D9E75';
+    if (s === 'Notified')   return '#EF9F27';
+    if (s === 'Deflection') return '#8E44AD';
+    return '#aaa';
+  };
+  const total = ret.totalReturns || 1;
+  const segs = Object.entries(ret.statusCounts).map(([s, n]) =>
+    `<div style="background:${statusColor(s)};flex:${n}" title="${s}: ${n}"></div>`).join('');
+  const legs = Object.entries(ret.statusCounts).map(([s, n]) =>
+    `<span class="leg"><span class="leg-sq" style="background:${statusColor(s)}"></span>${s} — ${n} (${(n/total*100).toFixed(1)}%)</span>`).join('');
+
+  return `
+  <div class="divider">↩ Return orders</div>
+  <div class="g4">
+    <div class="kpi"><div class="kpi-l">Total return orders</div><div class="kpi-v" style="color:#E24B4A">${ret.totalReturns}</div><div class="kpi-s">Across all markets</div></div>
+    <div class="kpi"><div class="kpi-l">Units to be returned</div><div class="kpi-v" style="color:#E24B4A">${Math.round(ret.totalToReturn)}</div><div class="kpi-s">Awaiting physical return</div></div>
+    <div class="kpi"><div class="kpi-l">Units physically returned</div><div class="kpi-v" style="color:${ret.totalReturned>0?'#0F6E56':'#aaa'}">${Math.round(ret.totalReturned)}</div><div class="kpi-s">Received back in warehouse</div></div>
+    <div class="kpi"><div class="kpi-l">Pending physical return</div><div class="kpi-v" style="color:#BA7517">${Math.round(pending)}</div><div class="kpi-s">Not yet received</div></div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <p class="slbl">Return order status pipeline</p>
+    <div class="pipe">${segs}</div>
+    <div class="leg-row">${legs}</div>
+  </div>`;
+}
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function processAnalysis(wmsRaw, salesRaw, wms, sales) {
+  const shopify = wmsRaw.filter(r => (r['Order type']||'').trim()==='Shopify Order');
+  const active  = shopify.filter(r => (r['Status']||'').trim() !== 'Cancelled');
+  const clean   = active.filter(r => r['Order ID'] && r['Order ID'].toString().trim()!=='');
+
+  // ── 1. Revenue by country ─────────────────────────────────────────────────
+  const items = salesRaw.filter(r => !('Type' in r) || (r['Type']||'').trim()==='Item');
+  const ctryRevMap = {};
+  items.forEach(r => {
+    const c = (r['Sell-to Country Code'] || r['Country'] || 'Unknown').toString().trim();
+    if (!ctryRevMap[c]) ctryRevMap[c] = { rev: 0, units: 0, orders: new Set() };
+    ctryRevMap[c].rev   += parseFloat(r['Line Amount Incl. VAT']) || 0;
+    ctryRevMap[c].units += parseFloat(r['Quantity']) || 0;
+    ctryRevMap[c].orders.add(r['Document No.']);
+  });
+  const ctryRev = Object.entries(ctryRevMap)
+    .map(([c, v]) => ({ country: c, rev: v.rev, units: v.units, orders: v.orders.size, avg: v.orders.size > 0 ? v.rev / v.orders.size : 0 }))
+    .sort((a, b) => b.rev - a.rev).slice(0, 10);
+
+  // ── 2. Revenue by day ─────────────────────────────────────────────────────
+  const dayRevMap = {};
+  items.forEach(r => {
+    const d = r['Shipment Date'] ? new Date(r['Shipment Date']) : null;
+    if (!d || isNaN(d)) return;
+    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    if (!dayRevMap[key]) dayRevMap[key] = { rev: 0, units: 0, orders: new Set() };
+    dayRevMap[key].rev   += parseFloat(r['Line Amount Incl. VAT']) || 0;
+    dayRevMap[key].units += parseFloat(r['Quantity']) || 0;
+    dayRevMap[key].orders.add(r['Document No.']);
+  });
+  const dayRev = Object.entries(dayRevMap)
+    .map(([k, v]) => ({ date: k, rev: v.rev, units: v.units, orders: v.orders.size }))
+    .sort((a,b) => a.date.localeCompare(b.date));
+
+  // ── 3. Slow movers (bottom 10 by units) ───────────────────────────────────
+  const slowMovers = Object.entries(
+    items.reduce((acc, r) => {
+      const d = (r['Description']||'').trim();
+      if (!d) return acc;
+      acc[d] = (acc[d] || 0) + (parseFloat(r['Quantity']) || 0);
+      return acc;
+    }, {}))
+    .map(([d, u]) => ({ desc: d, units: u }))
+    .sort((a,b) => a.units - b.units).slice(0, 10);
+
+  // ── 4. Pending age distribution (for bar chart) ───────────────────────────
+  const ageBuckets = { '0': 0, '1': 0, '2': 0, '3-5': 0, '6+': 0 };
+  const pendingOrders = clean.filter(r => !FULFILLED.includes(r['Status']));
+  const reportDate = wms.reportDate;
+  pendingOrders.forEach(r => {
+    const d = r['Created'] ? new Date(r['Created']) : null;
+    if (!d || isNaN(d)) return;
+    const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const days = Math.round((reportDate - dDay) / 86400000);
+    if      (days <= 0) ageBuckets['0']++;
+    else if (days === 1) ageBuckets['1']++;
+    else if (days === 2) ageBuckets['2']++;
+    else if (days <= 5)  ageBuckets['3-5']++;
+    else                 ageBuckets['6+']++;
+  });
+
+  // ── 5. Top customers ──────────────────────────────────────────────────────
+  const custMap = {};
+  items.forEach(r => {
+    const c = (r['Sell-to Customer Name'] || r['Customer'] || '').toString().trim();
+    if (!c) return;
+    if (!custMap[c]) custMap[c] = { rev: 0, units: 0, orders: new Set() };
+    custMap[c].rev   += parseFloat(r['Line Amount Incl. VAT']) || 0;
+    custMap[c].units += parseFloat(r['Quantity']) || 0;
+    custMap[c].orders.add(r['Document No.']);
+  });
+  const topCustomers = Object.entries(custMap)
+    .map(([c, v]) => ({ name: c, rev: v.rev, units: v.units, orders: v.orders.size }))
+    .sort((a,b) => b.rev - a.rev).slice(0, 10);
+
+  // ── 6. Category analysis ──────────────────────────────────────────────────
+  const catMap = {};
+  items.forEach(r => {
+    const d = (r['Description']||'').toString().toUpperCase();
+    let cat = 'Other';
+    if (/PANT|JEAN|TROUSER|CHINO/i.test(d))              cat = 'Pants & Jeans';
+    else if (/SHORT/i.test(d))                            cat = 'Shorts';
+    else if (/TEE|T-SHIRT|SHIRT|SS |LS /i.test(d))       cat = 'Tops & Tees';
+    else if (/JACKET|COAT|HOODI|SWEAT|FLEECE/i.test(d))  cat = 'Outerwear';
+    else if (/SOCK|HAT|CAP|BAG|BELT|WALLET/i.test(d))    cat = 'Accessories';
+    if (!catMap[cat]) catMap[cat] = { units: 0, rev: 0, orders: new Set() };
+    catMap[cat].units += parseFloat(r['Quantity']) || 0;
+    catMap[cat].rev   += parseFloat(r['Line Amount Incl. VAT']) || 0;
+    catMap[cat].orders.add(r['Document No.']);
+  });
+  const categories = Object.entries(catMap)
+    .map(([c, v]) => ({ cat: c, units: v.units, rev: v.rev, orders: v.orders.size }))
+    .sort((a,b) => b.units - a.units);
+
+  // ── 7. Price band ─────────────────────────────────────────────────────────
+  const orderRevMap = {};
+  items.forEach(r => {
+    const doc = r['Document No.']; if (!doc) return;
+    orderRevMap[doc] = (orderRevMap[doc] || 0) + (parseFloat(r['Line Amount Incl. VAT']) || 0);
+  });
+  const bands = { 'Under €50': 0, '€50–100': 0, '€100–200': 0, '€200–300': 0, 'Over €300': 0 };
+  Object.values(orderRevMap).forEach(v => {
+    if      (v < 50)  bands['Under €50']++;
+    else if (v < 100) bands['€50–100']++;
+    else if (v < 200) bands['€100–200']++;
+    else if (v < 300) bands['€200–300']++;
+    else              bands['Over €300']++;
+  });
+
+  const totalRev = items.reduce((s,r) => s + (parseFloat(r['Line Amount Incl. VAT'])||0), 0);
+
+  return { ctryRev, dayRev, slowMovers, ageBuckets, topCustomers, categories, bands, totalRev };
+}
+
+function renderAnalysis(wms, sales, analysis) {
+  const fmtEur = n => '€' + Math.round(n).toLocaleString();
+  const maxRev  = analysis.ctryRev[0]?.rev || 1;
+  const maxDayR = Math.max(...analysis.dayRev.map(d => d.rev), 1);
+
+  // Country revenue table
+  const ctryRows = analysis.ctryRev.map((c, i) => {
+    const barW = Math.round(c.rev / maxRev * 100);
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+    return `<tr>
+      <td>${medal} ${c.country}</td>
+      <td class="num">${fmtEur(c.rev)}</td>
+      <td class="num">${Math.round(c.units)}</td>
+      <td class="num">${c.orders}</td>
+      <td class="num">${fmtEur(c.avg)}</td>
+      <td style="width:80px"><div style="background:#F0F2F5;border-radius:3px;height:6px"><div style="background:#185FA5;width:${barW}%;height:6px;border-radius:3px"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  // Category table
+  const catColors = { 'Pants & Jeans':'#185FA5','Shorts':'#1D9E75','Tops & Tees':'#E67E22','Outerwear':'#8E44AD','Accessories':'#7F8C8D','Other':'#BDC3C7' };
+  const catRows = analysis.categories.map(c => {
+    const pct = analysis.totalRev > 0 ? (c.rev / analysis.totalRev * 100).toFixed(1) : '0.0';
+    const col  = catColors[c.cat] || '#aaa';
+    return `<tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};margin-right:6px"></span>${c.cat}</td>
+      <td class="num">${Math.round(c.units)}</td>
+      <td class="num">${fmtEur(c.rev)}</td>
+      <td class="num">${c.orders}</td>
+      <td class="num">${pct}%</td>
+    </tr>`;
+  }).join('');
+
+  // Top customers table
+  const custRows = analysis.topCustomers.map((c, i) => `<tr>
+    <td>${i+1}. ${c.name.length > 28 ? c.name.slice(0,28)+'…' : c.name}</td>
+    <td class="num">${fmtEur(c.rev)}</td>
+    <td class="num">${Math.round(c.units)}</td>
+    <td class="num">${c.orders}</td>
+  </tr>`).join('');
+
+  // Slow movers table
+  const slowRows = analysis.slowMovers.map((s,i) => `<tr>
+    <td>${i+1}. ${s.desc.length>36?s.desc.slice(0,36)+'…':s.desc}</td>
+    <td class="num" style="color:#E24B4A">${Math.round(s.units)}</td>
+  </tr>`).join('');
+
+  // Price band summary
+  const bandTotal = Object.values(analysis.bands).reduce((s,v)=>s+v,0)||1;
+  const bandRows = Object.entries(analysis.bands).map(([b,n]) => {
+    const pct = (n/bandTotal*100).toFixed(0);
+    const w   = Math.round(n/bandTotal*100);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F0F2F5;font-size:12px">
+      <span style="min-width:90px;color:var(--text)">${b}</span>
+      <div style="flex:1;background:#F0F2F5;border-radius:3px;height:7px"><div style="background:#2E6DB4;width:${w}%;height:7px;border-radius:3px"></div></div>
+      <span style="min-width:30px;text-align:right;font-weight:600;color:var(--navy)">${n}</span>
+      <span style="min-width:30px;text-align:right;color:var(--muted)">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  const html = `
+  <!-- KPI summary row -->
+  <div class="an-grid3" style="margin-bottom:16px">
+    <div class="insight-card">
+      <div class="insight-lbl">Total revenue</div>
+      <div class="insight-num">${fmtEur(analysis.totalRev)}</div>
+      <div class="insight-desc">Across all active sales orders</div>
+    </div>
+    <div class="insight-card">
+      <div class="insight-lbl">Avg order value</div>
+      <div class="insight-num">${fmtEur(analysis.totalRev / (sales.totalOrders||1))}</div>
+      <div class="insight-desc">Per sales order placed</div>
+    </div>
+    <div class="insight-card">
+      <div class="insight-lbl">Top country revenue</div>
+      <div class="insight-num">${analysis.ctryRev[0]?.country || '—'}</div>
+      <div class="insight-desc">${fmtEur(analysis.ctryRev[0]?.rev||0)} — highest revenue market</div>
+    </div>
+  </div>
+
+  <!-- Revenue by country + Category -->
+  <div class="an-grid2">
+    <div class="card">
+      <div class="an-title">💰 Revenue by country</div>
+      <table class="tbl">
+        <thead><tr><th>Country</th><th class="num">Revenue</th><th class="num">Units</th><th class="num">Orders</th><th class="num">Avg Order</th><th></th></tr></thead>
+        <tbody>${ctryRows}</tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="an-title">🏷️ Product category breakdown</div>
+      <table class="tbl">
+        <thead><tr><th>Category</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Orders</th><th class="num">% Rev</th></tr></thead>
+        <tbody>${catRows}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Daily revenue chart + Pending age distribution -->
+  <div class="an-grid2">
+    <div class="card">
+      <div class="an-title">📈 Daily revenue trend</div>
+      <div style="position:relative;height:220px"><canvas id="revChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="an-title">⏱️ Pending order age distribution</div>
+      <div style="position:relative;height:220px"><canvas id="ageChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Top customers + Slow movers -->
+  <div class="an-grid2">
+    <div class="card">
+      <div class="an-title">⭐ Top customers by revenue</div>
+      <table class="tbl">
+        <thead><tr><th>Customer</th><th class="num">Revenue</th><th class="num">Units</th><th class="num">Orders</th></tr></thead>
+        <tbody>${custRows}</tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="an-title">🐢 Slow movers — lowest unit sales</div>
+      <table class="tbl">
+        <thead><tr><th>Product</th><th class="num">Units Sold</th></tr></thead>
+        <tbody>${slowRows}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Price band -->
+  <div class="card">
+    <div class="an-title">💳 Order value (price band) distribution</div>
+    <div style="max-width:500px">${bandRows}</div>
+  </div>
+  `;
+
+  document.getElementById('analysis-content').innerHTML = html;
+
+  // Charts
+  requestAnimationFrame(() => {
+    const tc='#6B7A8D', gc='rgba(0,0,0,0.05)';
+
+    // Revenue by day
+    const revCtx = document.getElementById('revChart');
+    safeChart('revChart', {
+        type: 'bar',
+        data: {
+          labels: analysis.dayRev.map(d => {
+            const [yr,mo,dy] = d.date.split('-');
+            return new Date(yr,mo-1,dy).toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+          }),
+          datasets: [{
+            label: 'Revenue (€)',
+            data: analysis.dayRev.map(d => Math.round(d.rev)),
+            backgroundColor: analysis.dayRev.map((d,i) => i===analysis.dayRev.length-1?'#185FA5':'#93C6EF'),
+            borderRadius: 3, borderSkipped: false
+          }]
+        },
+        options: { responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>' €'+Math.round(ctx.parsed.y).toLocaleString()}} },
+          scales:{ x:{ticks:{color:tc,font:{size:10},maxRotation:35},grid:{display:false},border:{display:false}},
+                   y:{ticks:{color:tc,font:{size:10},callback:v=>'€'+Math.round(v/1000)+'k'},grid:{color:gc},border:{display:false}} } }
+      });
+
+    // Pending age distribution
+    {
+      const ageBucketColors = ['#1D9E75','#EF9F27','#EF9F27','#E24B4A','#C0392B'];
+      const labels = ['Yesterday (0d)','1 day','2 days','3–5 days','6+ days'];
+      const data   = Object.values(analysis.ageBuckets);
+      safeChart('ageChart', {
+        type: 'bar',
+        data: {
+          labels,
+          datasets:[{ label:'Orders', data, backgroundColor:ageBucketColors, borderRadius:3, borderSkipped:false }]
+        },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>' '+ctx.parsed.y+' orders'}}},
+          scales:{ x:{ticks:{color:tc,font:{size:10},maxRotation:0},grid:{display:false},border:{display:false}},
+                   y:{ticks:{color:tc,font:{size:10}},grid:{color:gc},border:{display:false}} } }
+      });
+    }
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// RETURNS TAB — processReturns + renderReturns
+// ════════════════════════════════════════════════════════════════════════
+
+function processReturns(raw, linesRaw = []) {
+  // Filter: Shopify returns only (Return order number starts with S-RO)
+  // Exclude D-series, blank rows and any other non-Shopify sources
+  raw = raw.filter(r => {
+    const ron = (r['Return order number'] || '').toString().trim();
+    return ron.startsWith('S-RO');
+  });
+
+  // ── Return Lines (top returned items) ────────────────────────────────
+  const erpLines = linesRaw.filter(r => {
+    const dt  = (r['Document Type'] || '').toString().trim();
+    const doc = (r['Document No.']  || '').toString().trim();
+    const typ = (r['Type']          || '').toString().trim();
+    return (dt === 'Return Order' || doc.startsWith('S-RO')) && typ === 'Item';
+  });
+
+  // Top returned items by quantity
+  const itemMap = {};
+  erpLines.forEach(r => {
+    const desc = (r['Description'] || '').toString().trim();
+    if (!desc) return;
+    if (!itemMap[desc]) itemMap[desc] = { qty: 0, orders: new Set() };
+    itemMap[desc].qty    += parseFloat(r['Quantity']) || 0;
+    itemMap[desc].orders.add(r['Document No.']);
+  });
+  const topReturnedItems = Object.entries(itemMap)
+    .map(([desc, v]) => ({ desc, qty: Math.round(v.qty), orders: v.orders.size }))
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, 10);
+
+  const totalReturnedQty  = erpLines.reduce((s, r) => s + (parseFloat(r['Quantity']) || 0), 0);
+  const erpOrderCount     = new Set(erpLines.map(r => r['Document No.'])).size;
+
+  // Status counts
+  const statusCounts = {};
+  raw.forEach(r => {
+    const s = (r['Status'] || 'Unknown').toString().trim();
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+  });
+
+  // Country breakdown
+  const ctryMap = {};
+  raw.forEach(r => {
+    const c = (r['Country'] || 'Unknown').toString().trim();
+    if (!ctryMap[c]) ctryMap[c] = { returns: 0, toReturn: 0, returned: 0 };
+    ctryMap[c].returns++;
+    ctryMap[c].toReturn  += parseFloat(r['To be returned']) || 0;
+    ctryMap[c].returned  += parseFloat(r['Returned'])       || 0;
+  });
+  const countries = Object.entries(ctryMap)
+    .map(([c, v]) => ({ country: c, returns: v.returns, toReturn: v.toReturn, returned: v.returned }))
+    .sort((a, b) => b.returns - a.returns);
+
+  // Returns by date
+  const dateMap = {};
+  raw.forEach(r => {
+    const d = r['ReturnInDate'] ? new Date(r['ReturnInDate']) : null;
+    if (!d || isNaN(d)) return;
+    const key = d.getFullYear() + '-' +
+                String(d.getMonth()+1).padStart(2,'0') + '-' +
+                String(d.getDate()).padStart(2,'0');
+    dateMap[key] = (dateMap[key] || 0) + 1;
+  });
+  const byDate = Object.entries(dateMap)
+    .map(([date, n]) => {
+      const [yr, mo, dy] = date.split('-').map(Number);
+      const label = new Date(yr, mo-1, dy).toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+      return { date, label, count: n };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // causes kept for future use
+  const causes = [];
+
+  // Top returning customers by units
+  const custMap = {};
+  raw.forEach(r => {
+    const name = (r['Name'] || 'Unknown').toString().trim();
+    if (!custMap[name]) custMap[name] = { returns: 0, units: 0, country: (r['Country']||'') };
+    custMap[name].returns++;
+    custMap[name].units += parseFloat(r['To be returned']) || 0;
+  });
+  const topCustomers = Object.entries(custMap)
+    .map(([n, v]) => ({ name: n, returns: v.returns, units: v.units, country: v.country }))
+    .sort((a, b) => b.units - a.units)
+    .slice(0, 10);
+
+  const totalReturns  = raw.length;
+  const totalToReturn = raw.reduce((s, r) => s + (parseFloat(r['To be returned']) || 0), 0);
+  const totalReturned = raw.reduce((s, r) => s + (parseFloat(r['Returned'])       || 0), 0);
+  const totalOrdered  = raw.reduce((s, r) => s + (parseFloat(r['Ordered'])        || 0), 0);
+  const noCause       = raw.filter(r => !r['Return cause'] || r['Return cause'].toString().trim() === '').length;
+
+  return {
+    raw, statusCounts, countries, byDate, causes, topCustomers,
+    totalReturns, totalToReturn, totalReturned, totalOrdered, noCause,
+    topReturnedItems, totalReturnedQty: Math.round(totalReturnedQty), erpOrderCount
+  };
+}
+
+function renderReturns(ret) {
+  const pending   = ret.totalToReturn - ret.totalReturned;
+  const returnPct = ret.totalReturns > 0
+    ? ((ret.totalReturned / ret.totalToReturn) * 100).toFixed(1) : '0.0';
+
+  // Country rows
+  const maxRet = ret.countries[0]?.returns || 1;
+  const ctryRows = ret.countries.map((c, i) => {
+    const barW = Math.round(c.returns / maxRet * 100);
+    return `<div class="cr">
+      <span style="flex:1;font-size:12px">${c.country}</span>
+      <span style="color:#aaa;font-size:10px;min-width:52px;text-align:right">${c.returns} returns</span>
+      <div class="br" style="width:70px"><div class="bf" style="background:#E24B4A;width:${barW}%"></div></div>
+      <span style="min-width:32px;text-align:right;font-size:12px;font-weight:500;color:#922B21">${Math.round(c.toReturn)} units</span>
+    </div>`;
+  }).join('');
+
+  // Date rows for chart
+  // Top returned items rows
+  const hasErpLines = ret.topReturnedItems && ret.topReturnedItems.length > 0;
+  const goldStyles  = ['#FEF9E7:#B7860B','#F5F5F5:#707070','#FDF0E6:#7D4010'];
+  const topItemRows = hasErpLines
+    ? ret.topReturnedItems.map((item, i) => {
+        const [bg, col] = (goldStyles[i] || '#F4F6F8:#6B7A8D').split(':');
+        const barW = Math.round(item.qty / ret.topReturnedItems[0].qty * 100);
+        return `<div class="cr">
+          <span class="rb" style="background:${bg};color:${col};font-size:10px;font-weight:600;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</span>
+          <span style="flex:1;font-size:12px;margin-left:8px">${item.desc.charAt(0)+item.desc.slice(1).toLowerCase()}</span>
+          <div class="br" style="width:60px"><div class="bf" style="background:#E24B4A;width:${barW}%"></div></div>
+          <span class="pill pr" style="margin-left:6px">${item.qty} units</span>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:12px;color:#aaa;padding:10px 0">Upload Return Lines file to see top return items.</div>';
+
+  // Return rate insight
+  const returnRateLabel = ret.erpOrderCount > 0
+    ? `${ret.erpOrderCount} orders · ${ret.totalReturnedQty} units`
+    : 'Upload Return Lines file to see unit breakdown';
+
+  // Top customers
+  const custRows = ret.topCustomers.map((c, i) => `<div class="cr">
+    <span style="font-size:11px;color:#aaa;min-width:18px">${i+1}.</span>
+    <span style="flex:1;font-size:12px">${c.name}</span>
+    <span style="font-size:11px;color:var(--color-text-secondary, #555);background:var(--color-background-secondary,#f4f6f8);padding:1px 7px;border-radius:20px;min-width:60px;text-align:center">${c.country}</span>
+    <span class="pill pr">${Math.round(c.units)} units</span>
+  </div>`).join('');
+
+  // Status pipeline
+  const total = ret.totalReturns;
+  const statusColor = (s) => {
+    if (s === 'Returned')   return '#1D9E75';  // green — physically returned
+    if (s === 'Notified')   return '#EF9F27';  // amber — awaiting return
+    if (s === 'Deflection') return '#8E44AD';  // purple — return deflected/cancelled
+    return '#aaa';
+  };
+  const statusNote = (s) => {
+    if (s === 'Deflection') return ' (deflected)';
+    return '';
+  };
+  const statSegs = Object.entries(ret.statusCounts).map(([s, n]) => {
+    return `<div style="background:${statusColor(s)};flex:${n}" title="${s}: ${n}"></div>`;
+  }).join('');
+  const statLegs = Object.entries(ret.statusCounts).map(([s, n]) => {
+    return `<span class="leg"><span class="leg-sq" style="background:${statusColor(s)}"></span>${s}${statusNote(s)} — ${n} (${(n/total*100).toFixed(1)}%)</span>`;
+  }).join('');
+
+  // Return cause warning removed — cause field is not yet in use
+  const noReasonWarning = '';
+
+  const html = `
+  ${noReasonWarning}
+
+  <!-- KPIs -->
+  <p class="slbl">↩ Return orders overview</p>
+  <div class="g4" style="margin-bottom:12px">
+    <div class="kpi"><div class="kpi-l">Total return orders</div><div class="kpi-v" style="color:#E24B4A">${ret.totalReturns}</div><div class="kpi-s">Across all markets</div></div>
+    <div class="kpi"><div class="kpi-l">Units to be returned</div><div class="kpi-v" style="color:#E24B4A">${Math.round(ret.totalToReturn)}</div><div class="kpi-s">Awaiting physical return</div></div>
+    <div class="kpi"><div class="kpi-l">Units physically returned</div><div class="kpi-v" style="color:${ret.totalReturned > 0 ? '#0F6E56' : '#aaa'}">${Math.round(ret.totalReturned)}</div><div class="kpi-s">Received back in warehouse</div></div>
+    <div class="kpi"><div class="kpi-l">Pending physical return</div><div class="kpi-v" style="color:#BA7517">${Math.round(pending)}</div><div class="kpi-s">Not yet received</div></div>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="card" style="margin-bottom:12px">
+    <p class="slbl">Return order status pipeline</p>
+    <div class="pipe">${statSegs}</div>
+    <div class="leg-row">${statLegs}</div>
+  </div>
+
+  <!-- Returns by date (full width) -->
+  <div class="card" style="margin-bottom:12px">
+    <p class="slbl">Returns received by date</p>
+    <div style="position:relative;height:200px"><canvas id="returnsDateChart" role="img" aria-label="Returns by date chart"></canvas></div>
+  </div>
+
+  <div class="g2">
+    <!-- Country breakdown -->
+    <div class="card">
+      <p class="slbl">Returns by country</p>
+      ${ctryRows}
+    </div>
+
+    <!-- Top returning customers -->
+    <div class="card">
+      <p class="slbl">Top customers by units to return</p>
+      ${custRows}
+    </div>
+  </div>
+  `;
+
+  document.getElementById('returns-content').innerHTML = html;
+
+  // Chart
+  requestAnimationFrame(() => {
+    const tc = '#6B7A8D', gc = 'rgba(0,0,0,0.05)';
+    safeChart('returnsDateChart', {
+      type: 'bar',
+      data: {
+        labels: ret.byDate.map(d => d.label),
+        datasets: [{ label: 'Returns', data: ret.byDate.map(d => d.count),
+          backgroundColor: '#E24B4A', borderRadius: 3, borderSkipped: false }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.y + ' returns' } } },
+        scales: { x: { ticks: { color: tc, font: { size: 10 }, maxRotation: 0 }, grid: { display: false }, border: { display: false } },
+                  y: { ticks: { color: tc, font: { size: 10 } }, grid: { color: gc }, border: { display: false } } } }
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// PO INBOUND TAB — processPO + renderPO
+// ════════════════════════════════════════════════════════════════════════
+
+function processPO(raw) {
+  // Remove blank rows (no PO number)
+  const data = raw.filter(r => r['Purchase order number'] && r['Purchase order number'].toString().trim() !== '');
+
+  const statuses   = [...new Set(data.map(r => (r['Status'] || 'Unknown').toString().trim()))].sort();
+  const totalPOs   = data.length;
+  const advised    = data.reduce((s,r) => s + (parseFloat(r['Advised'])          || 0), 0);
+  const received   = data.reduce((s,r) => s + (parseFloat(r['Received'])         || 0), 0);
+  const leftToRecv = data.reduce((s,r) => s + (parseFloat(r['Left to receive'])  || 0), 0);
+  const recvPct    = advised > 0 ? (received / advised * 100).toFixed(1) : '0.0';
+
+  // Status counts
+  const statusCounts = {};
+  data.forEach(r => {
+    const s = (r['Status'] || 'Unknown').toString().trim();
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+  });
+
+  // Supplier summary
+  const supplierMap = {};
+  data.forEach(r => {
+    const s = (r['Supplier name'] || '—').toString().trim();
+    if (!supplierMap[s]) supplierMap[s] = { pos: 0, advised: 0, received: 0, left: 0 };
+    supplierMap[s].pos++;
+    supplierMap[s].advised   += parseFloat(r['Advised']) || 0;
+    supplierMap[s].received  += parseFloat(r['Received']) || 0;
+    supplierMap[s].left      += parseFloat(r['Left to receive']) || 0;
+  });
+  const suppliers = Object.entries(supplierMap)
+    .map(([name, v]) => ({ name, ...v }))
+    .sort((a,b) => b.advised - a.advised);
+
+  return { data, statuses, totalPOs, advised, received, leftToRecv, recvPct, statusCounts, suppliers };
+}
+
+// ── Status colour helper ──────────────────────────────────────────────────────
+function poStatusColor(s) {
+  if (s === 'Received')      return { bg: '#D5F5E3', txt: '#145A32', bar: '#1D9E75' };
+  if (s === 'Arrival space') return { bg: '#EBF3FC', txt: '#185FA5', bar: '#378ADD' };
+  if (s === 'Notified')      return { bg: '#FEF9E7', txt: '#7D6608', bar: '#EF9F27' };
+  if (s === 'Cancelled')     return { bg: '#FDEDEC', txt: '#922B21', bar: '#E24B4A' };
+  return { bg: '#F4F6F8', txt: '#6B7A8D', bar: '#B4B2A9' };
+}
+
+function renderPO(po) {
+  const fmt = n => Math.round(n).toLocaleString();
+  const fmtPct = n => Number(n).toFixed(1) + '%';
+
+  // Pipeline segments
+  const total = po.totalPOs || 1;
+  const segs = Object.entries(po.statusCounts).map(([s, n]) => {
+    const c = poStatusColor(s);
+    return `<div style="background:${c.bar};flex:${n}" title="${s}: ${n}"></div>`;
+  }).join('');
+  const legs = Object.entries(po.statusCounts).map(([s, n]) => {
+    const c = poStatusColor(s);
+    return `<span class="leg"><span class="leg-sq" style="background:${c.bar}"></span>${s} — ${n} (${(n/total*100).toFixed(1)}%)</span>`;
+  }).join('');
+
+  // Status filter checkboxes
+  const filterBoxes = po.statuses.map(s => {
+    const c = poStatusColor(s);
+    const n = po.statusCounts[s] || 0;
+    return `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;background:${c.bg};color:${c.txt};padding:4px 10px;border-radius:20px;border:1.5px solid ${c.bar};user-select:none">
+      <input type="checkbox" checked value="${s}" onchange="filterPOTable()" style="accent-color:${c.bar};cursor:pointer">
+      ${s} <span style="font-weight:600">(${n})</span>
+    </label>`;
+  }).join('');
+
+  // PO table rows
+  const tableRows = po.data.map((r,i) => {
+    const s   = (r['Status'] || 'Unknown').toString().trim();
+    const c   = poStatusColor(s);
+    const adv = parseFloat(r['Advised'])         || 0;
+    const rcv = parseFloat(r['Received'])        || 0;
+    const lft = parseFloat(r['Left to receive']) || 0;
+    const pct = adv > 0 ? (rcv/adv*100).toFixed(1) : '0.0';
+    const pctCol = parseFloat(pct) >= 100 ? '#145A32' : parseFloat(pct) >= 50 ? '#185FA5' : '#BA7517';
+
+    // Dates
+    const fmtD = d => {
+      if (!d || d === '') return '—';
+      const dt = new Date(d);
+      return isNaN(dt) ? '—' : dt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' });
+    };
+
+    const rowBg = i % 2 === 0 ? '#fff' : '#F8FAFC';
+    return `<tr data-status="${s}" style="background:${rowBg}">
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px;font-weight:500;white-space:nowrap">${r['Purchase order number'] || '—'}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px"><span style="background:${c.bg};color:${c.txt};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap">${s}</span></td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px">${r['Supplier name'] || '—'}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px">${r['Supplier country'] || '—'}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px;text-align:right">${fmt(adv)}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px;text-align:right;color:#145A32;font-weight:500">${fmt(rcv)}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px;text-align:right;color:${lft > 0 ? '#BA7517' : '#aaa'}">${fmt(lft)}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px;text-align:right;font-weight:600;color:${pctCol}">${pct}%</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px;white-space:nowrap">${fmtD(r['Inbound date'])}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px;white-space:nowrap">${fmtD(r['Arrival date'])}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:12px">${r['Container'] || '—'}</td>
+      <td style="padding:7px 8px;border-bottom:1px solid #F0F2F5;font-size:11px;color:#888;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['Comment'] || ''}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `
+  <!-- KPIs -->
+  <p class="slbl" style="margin-bottom:10px">📦 Inbound PO status — as of today</p>
+  <div class="g4" style="margin-bottom:14px">
+    <div class="kpi"><div class="kpi-l">Total POs</div><div class="kpi-v">${fmt(po.totalPOs)}</div><div class="kpi-s">Purchase orders</div></div>
+    <div class="kpi"><div class="kpi-l">Units advised</div><div class="kpi-v">${fmt(po.advised)}</div><div class="kpi-s">Total inbound quantity</div></div>
+    <div class="kpi"><div class="kpi-l">Units received</div><div class="kpi-v" style="color:#0F6E56">${fmt(po.received)}</div><div class="kpi-s">${po.recvPct}% of advised</div></div>
+    <div class="kpi"><div class="kpi-l">Left to receive</div><div class="kpi-v" style="color:${parseFloat(po.leftToRecv)>0?'#BA7517':'#aaa'}">${fmt(po.leftToRecv)}</div><div class="kpi-s">Still outstanding</div></div>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="card" style="margin-bottom:14px">
+    <p class="slbl">PO status pipeline</p>
+    <div class="pipe">${segs}</div>
+    <div class="leg-row">${legs}</div>
+  </div>
+
+  <!-- Filter + Table -->
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <p class="slbl" style="margin:0">PO order list</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:11px;color:#aaa">Filter by status:</span>
+        ${filterBoxes}
+        <button onclick="selectAllPO(true)" style="font-size:11px;color:#185FA5;background:none;border:none;cursor:pointer;padding:2px 4px">All</button>
+        <button onclick="selectAllPO(false)" style="font-size:11px;color:#922B21;background:none;border:none;cursor:pointer;padding:2px 4px">None</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table id="po-table" style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#F8FAFC">
+            <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE;white-space:nowrap">PO Number</th>
+            <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE">Status</th>
+            <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE">Supplier</th>
+            <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE">Country</th>
+            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE">Advised</th>
+            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE">Received</th>
+            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE">Left</th>
+            <th style="padding:7px 8px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE">Recv%</th>
+            <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE;white-space:nowrap">Inbound Date</th>
+            <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE;white-space:nowrap">Arrival Date</th>
+            <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE">Container</th>
+            <th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D;border-bottom:1px solid #E0E6EE">Comment</th>
+          </tr>
+        </thead>
+        <tbody id="po-tbody">${tableRows}</tbody>
+      </table>
+    </div>
+    <div id="po-row-count" style="font-size:11px;color:#aaa;margin-top:8px;text-align:right">Showing ${po.totalPOs} of ${po.totalPOs} POs</div>
+  </div>`;
+
+  document.getElementById('po-content').innerHTML = html;
+}
+
+// ── Filter function — reads checkboxes and shows/hides table rows ──────────────
+function filterPOTable() {
+  const checked = new Set(
+    [...document.querySelectorAll('#po-content input[type=checkbox]:checked')].map(i => i.value)
+  );
+  const rows = document.querySelectorAll('#po-tbody tr');
+  let visible = 0;
+  rows.forEach(r => {
+    const show = checked.has(r.dataset.status);
+    r.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  const total = rows.length;
+  const el = document.getElementById('po-row-count');
+  if (el) el.textContent = `Showing ${visible} of ${total} POs`;
+}
+
+function selectAllPO(selectAll) {
+  document.querySelectorAll('#po-content input[type=checkbox]').forEach(cb => cb.checked = selectAll);
+  filterPOTable();
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// ORDER TYPE SELECTOR — detects B2C vs B2B from WMS file automatically
+// Shopify Order logic stays 100% unchanged — new types just pass different
+// orderType string into the same processWMS function.
+// ════════════════════════════════════════════════════════════════════════
+
+// Types to always exclude from the selector (historical / irrelevant)
+const EXCLUDE_FROM_SELECTOR = ['Shopify Cutover'];
+
+function detectOrderTypes(raw) {
+  // Get all unique non-blank order types, excluding the ones we always hide
+  const types = [...new Set(raw
+    .map(r => (r['Order type'] || '').toString().trim())
+    .filter(t => t && !EXCLUDE_FROM_SELECTOR.includes(t))
+  )].sort();
+  return types;
+}
+
+function orderTypeLabel(t) {
+  // Human-readable label + badge
+  if (t === 'Shopify Order')  return { label: 'Shopify (B2C)', icon: '🛒', badge: 'B2C' };
+  if (t === 'Prebook')        return { label: 'Prebook (B2B)', icon: '📋', badge: 'B2B' };
+  // Any future types
+  return { label: t, icon: '📦', badge: 'B2B' };
+}
+
+function renderOutboundWithTypeSelector(raw) {
+  const types = detectOrderTypes(raw);
+
+  if (types.length <= 1) {
+    // Only one type — render directly, no selector needed
+    const type = types[0] || 'Shopify Order';
+    const wmsData = processWMS(raw, type);
+    document.getElementById('dash-content').innerHTML =
+      buildTypeHeader(types, type) + '<div id="wms-dashboard-inner"></div>';
+    renderDashboard(wmsData, null, type);
+    return;
+  }
+
+  // Multiple types — show selector and default to Shopify Order
+  const defaultType = types.includes('Shopify Order') ? 'Shopify Order' : types[0];
+  document.getElementById('dash-content').innerHTML =
+    buildTypeHeader(types, defaultType) + '<div id="wms-dashboard-inner"></div>';
+  const wmsData = processWMS(raw, defaultType);
+  renderDashboard(wmsData, null, defaultType);
+}
+
+function buildTypeHeader(types, activeType) {
+  if (types.length <= 1) return '';
+  const buttons = types.map(t => {
+    const { label, icon, badge } = orderTypeLabel(t);
+    const isActive = t === activeType;
+    const count = _wmsRaw.filter(r =>
+      (r['Order type'] || '').toString().trim() === t &&
+      (r['Status'] || '').trim() !== 'Cancelled' &&
+      r['Order ID'] && r['Order ID'].toString().trim() !== ''
+    ).length;
+    return `<button
+      onclick="switchOrderType('${t}')"
+      style="
+        display:inline-flex;align-items:center;gap:6px;
+        padding:8px 18px;border-radius:8px;border:1.5px solid ${isActive ? '#1B3A6B' : '#E0E6EE'};
+        background:${isActive ? '#1B3A6B' : '#fff'};
+        color:${isActive ? '#fff' : '#6B7A8D'};
+        font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;
+      "
+      id="otype-btn-${t.replace(/\s+/g,'-')}"
+    >
+      <span>${icon}</span>
+      <span>${label}</span>
+      <span style="
+        background:${isActive ? 'rgba(255,255,255,0.25)' : '#F0F2F5'};
+        color:${isActive ? '#fff' : '#6B7A8D'};
+        font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700
+      ">${count} orders</span>
+    </button>`;
+  }).join('');
+
+  return `<div style="
+    display:flex;align-items:center;gap:10px;
+    padding:12px 16px;background:#F8FAFC;
+    border-radius:10px;margin-bottom:14px;
+    border:1px solid #E0E6EE;flex-wrap:wrap
+  ">
+    <span style="font-size:11px;font-weight:600;color:#6B7A8D;margin-right:4px">Order type:</span>
+    ${buttons}
+  </div>`;
+}
+
+function switchOrderType(orderType) {
+  if (!_wmsRaw) return;
+  // Re-render header with new active type, then re-render dashboard
+  const types = detectOrderTypes(_wmsRaw);
+  document.getElementById('dash-content').innerHTML =
+    buildTypeHeader(types, orderType) + '<div id="wms-dashboard-inner"></div>';
+  // Destroy old charts
+  charts.forEach(c => { try { c.destroy(); } catch(e) {} });
+  charts = charts.filter(() => false);
+  // Re-process with selected order type (same processWMS logic, different type)
+  const wmsData = processWMS(_wmsRaw, orderType);
+  renderDashboard(wmsData, null, orderType);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// FOLDER CONNECTION — reads directly from OneDrive / local folder
+// Uses File System Access API (Chrome / Edge only)
+// File naming: Orders*.xlsx = WMS outbound, InOrders*.xlsx = PO inbound
+// ════════════════════════════════════════════════════════════════════════
+
+let _folderHandle = null; // persists for the browser session
+
+// Store/retrieve folder handle in IndexedDB so it survives page refresh
+const DB_NAME = 'itg_dashboard', STORE = 'folder';
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(STORE);
+    req.onsuccess = e => res(e.target.result);
+    req.onerror  = e => rej(e);
+  });
+}
+async function saveFolderHandle(handle) {
+  const db = await openDB();
+  db.transaction(STORE, 'readwrite').objectStore(STORE).put(handle, 'main');
+}
+async function loadFolderHandle() {
+  const db = await openDB();
+  return new Promise(res => {
+    const req = db.transaction(STORE).objectStore(STORE).get('main');
+    req.onsuccess = e => res(e.target.result || null);
+    req.onerror   = () => res(null);
+  });
+}
+
+// Check if File System Access API is available
+function folderApiSupported() {
+  return 'showDirectoryPicker' in window;
+}
+
+async function connectFolder() {
+  if (!folderApiSupported()) {
+    document.getElementById('folder-status').textContent =
+      '⚠ Your browser does not support this feature. Please use Chrome or Edge.';
+    document.getElementById('folder-status').style.color = '#FDEDEC';
+    return;
+  }
+  try {
+    document.getElementById('connect-folder-btn').textContent = 'Opening folder picker...';
+    const handle = await window.showDirectoryPicker({ mode: 'read' });
+    _folderHandle = handle;
+    await saveFolderHandle(handle);
+    document.getElementById('folder-status').textContent =
+      `✓ Connected: ${handle.name}`;
+    document.getElementById('folder-status').style.color = '#D5F5E3';
+    document.getElementById('connect-folder-btn').textContent = '✓ Folder Connected — Generating Dashboard...';
+    await loadAndRunFromFolder(handle);
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      document.getElementById('folder-status').textContent = '⚠ ' + err.message;
+      document.getElementById('folder-status').style.color = '#FDEDEC';
+    }
+    document.getElementById('connect-folder-btn').textContent = '🔗 Connect Folder (OneDrive / Local)';
+  }
+}
+
+async function getLatestFile(handle, prefix) {
+  // Find all files matching prefix (case-insensitive), return the latest by modified date
+  const matches = [];
+  for await (const [name, entry] of handle.entries()) {
+    if (entry.kind === 'file') {
+      const nameLower = name.toLowerCase();
+      const prefixLower = prefix.toLowerCase();
+      if (nameLower.startsWith(prefixLower) &&
+          (nameLower.endsWith('.xlsx') || nameLower.endsWith('.xls'))) {
+        const file = await entry.getFile();
+        matches.push({ name, file, modified: file.lastModified });
+      }
+    }
+  }
+  if (!matches.length) return null;
+  // Sort by most recently modified and return the latest
+  matches.sort((a, b) => b.modified - a.modified);
+  console.log(`Found ${matches.length} file(s) for prefix "${prefix}":`,
+    matches.map(m => m.name + ' (' + new Date(m.modified).toLocaleString() + ')'));
+  return matches[0].file;
+}
+
+async function loadAndRunFromFolder(handle) {
+  show('processing-screen');
+  document.getElementById('upload-error').innerHTML = '';
+  try {
+    setProc('Scanning folder...');
+
+    // Find latest WMS and PO files by prefix
+    const [wmsFile, poFile] = await Promise.all([
+      getLatestFile(handle, 'Orders'),
+      getLatestFile(handle, 'InOrders'),
+    ]);
+
+    let wmsFound = wmsFile ? wmsFile.name : null;
+    let poFound  = poFile  ? poFile.name  : null;
+
+    if (!wmsFile && !poFile) {
+      show('upload-screen');
+      document.getElementById('folder-status').textContent =
+        '⚠ No Orders_*.xlsx or InOrders_*.xlsx found in this folder.';
+      document.getElementById('folder-status').style.color = '#FDEDEC';
+      document.getElementById('connect-folder-btn').textContent = '🔗 Connect Folder (OneDrive / Local)';
+      return;
+    }
+
+    let wmsRaw = null, poRaw = null;
+    if (wmsFile) {
+      setProc(`Reading ${wmsFound}...`);
+      wmsRaw = await readExcelFile(wmsFile);
+    }
+    if (poFile) {
+      setProc(`Reading ${poFound}...`);
+      poRaw = await readExcelFile(poFile);
+    }
+
+    setProc('Building dashboard...');
+    await new Promise(r => setTimeout(r, 200));
+
+    // Show Refresh button
+    document.getElementById('refresh-btn').style.display = 'inline-flex';
+
+    // Update last-updated timestamp
+    const now = new Date();
+    const fileDate = wmsFile ? new Date(wmsFile.lastModified) : (poFile ? new Date(poFile.lastModified) : now);
+    document.getElementById('last-updated').textContent =
+      `File: ${fileDate.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})} · Refreshed: ${now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
+
+    // Run same dashboard pipeline
+    _wmsRaw = wmsRaw;
+    if (wmsRaw) {
+      renderOutboundWithTypeSelector(wmsRaw);
+    } else {
+      document.getElementById('dash-content').innerHTML =
+        '<div style="padding:50px;text-align:center;color:#aaa;font-size:13px">No WMS file found in folder.</div>';
+    }
+
+    if (poRaw) {
+      const poData = processPO(poRaw);
+      renderPO(poData);
+    } else {
+      document.getElementById('po-content').innerHTML =
+        '<div style="padding:50px;text-align:center;color:#aaa;font-size:13px">No PO Inbound file found in folder.</div>';
+    }
+
+    show('dashboard-screen');
+
+    // Reset button
+    document.getElementById('connect-folder-btn').textContent = '🔗 Connect Folder (OneDrive / Local)';
+
+  } catch (err) {
+    show('upload-screen');
+    document.getElementById('folder-status').textContent = '⚠ Error: ' + err.message;
+    document.getElementById('folder-status').style.color = '#FDEDEC';
+    document.getElementById('connect-folder-btn').textContent = '🔗 Connect Folder (OneDrive / Local)';
+  }
+}
+
+async function refreshFromFolder() {
+  // Re-request permission if needed (browsers may revoke between sessions)
+  if (!_folderHandle) {
+    _folderHandle = await loadFolderHandle();
+  }
+  if (!_folderHandle) {
+    alert('No folder connected. Please connect a folder first.');
+    goBack();
+    return;
+  }
+  // Check/request permission
+  const perm = await _folderHandle.queryPermission({ mode: 'read' });
+  if (perm !== 'granted') {
+    const req = await _folderHandle.requestPermission({ mode: 'read' });
+    if (req !== 'granted') {
+      alert('Folder permission denied. Please reconnect.');
+      return;
+    }
+  }
+  await loadAndRunFromFolder(_folderHandle);
+}
+
+// On page load — check if we have a saved folder handle and show status
+window.addEventListener('load', async () => {
+  if (!folderApiSupported()) {
+    document.getElementById('folder-status').textContent =
+      '⚠ Browser not supported — use Chrome or Edge for folder connection.';
+    return;
+  }
+  const saved = await loadFolderHandle();
+  if (saved) {
+    _folderHandle = saved;
+    document.getElementById('folder-status').textContent =
+      `📁 Previously connected: ${saved.name} — click to reconnect or ↓ upload manually`;
+    document.getElementById('connect-folder-btn').textContent = '🔗 Reconnect Folder';
+    document.getElementById('folder-status').style.color = 'rgba(255,255,255,0.7)';
+  }
+});
+
+// readExcelFile — works with a File object (same logic as readExcel but takes File directly)
+async function readExcelFile(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        let best = null, bestScore = -1;
+        wb.SheetNames.forEach(name => {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
+          let score = rows.length;
+          if (rows.length > 0) {
+            const keys = Object.keys(rows[0]);
+            const named = keys.filter(k => k && !/^(__EMPTY|Unnamed)/i.test(k)).length;
+            if (named < 2) score = 0;
+          }
+          if (/^data$/i.test(name) && rows.length > 0) score += 100000;
+          if (score > bestScore) { bestScore = score; best = rows; }
+        });
+        res(best || []);
+      } catch(err) { rej(err); }
+    };
+    reader.onerror = rej;
+    reader.readAsArrayBuffer(file);
+  });
+}
+</script>
+</body>
+</html>
