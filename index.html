@@ -700,14 +700,8 @@ function buildHTML(wms, returns, orderType = 'Shopify Order') {
     </div>
   </div>
 
-  <!-- Country volume TABLE — only shown for B2C (Shopify); B2B has detail table instead -->
-  ${!isB2B ? `<div class="card" style="margin-bottom:14px">
-    <p class="slbl">Order volume by country</p>
-    ${buildCountryVolumeTable(wms)}
-  </div>` : ''}
-
-  <!-- B2B Order Detail — only shown for non-Shopify order types -->
-  ${isB2B ? buildB2BOrderTable(wms) : ''}
+  <!-- Pending orders table for B2C / B2B order detail table -->
+  ${isB2B ? buildB2BOrderTable(wms) : buildB2CPendingTable(wms)}
 
   ${returns ? buildReturnsSummary(returns) : ''}
 
@@ -1999,6 +1993,112 @@ async function refreshDashboard() {
 
 // Auto-load when page opens
 window.addEventListener('load', loadFromGitHub);
+
+// ── B2C Pending Orders table — shown for Shopify (B2C) instead of country chart ─
+function buildB2CPendingTable(wms) {
+  if (!wms._b2bRows || !wms._b2bRows.length) return '';
+
+  // Filter to pending only (not fulfilled, not On Hold)
+  const FULFILLED_SET = new Set(['Collected','CustomsCleared']);
+  // Sort order: Open → Allocated → Customs Pending → On Hold → everything else
+  const STATUS_ORDER = {
+    'Open': 1,
+    'Allocated': 2,
+    'CustomsPendingForDocuments': 3,
+    'On Hold': 4,
+    'Picked': 5,
+    'PackedNotShipped': 6,
+  };
+  const pending = wms._b2bRows.filter(r => {
+    const s = (r['Status'] || '').trim();
+    return !FULFILLED_SET.has(s);
+  }).sort((a, b) => {
+    const aO = STATUS_ORDER[(a['Status']||'').trim()] || 99;
+    const bO = STATUS_ORDER[(b['Status']||'').trim()] || 99;
+    return aO - bO;
+  });
+
+  if (!pending.length) {
+    return `
+    <div class="divider">📋 Pending Orders</div>
+    <div class="card" style="margin-bottom:14px;text-align:center;padding:30px">
+      <div style="font-size:28px;margin-bottom:8px">✅</div>
+      <div style="font-size:13px;color:#145A32;font-weight:500">All orders fulfilled — no pending orders</div>
+    </div>`;
+  }
+
+  const statusColor = (s) => {
+    if (s === 'PackedNotShipped')           return { bg:'#EBF3FC', txt:'#185FA5' };
+    if (s === 'Allocated')                  return { bg:'#EBF3FC', txt:'#185FA5' };
+    if (s === 'Picked')                     return { bg:'#D1F2EB', txt:'#0E6655' };
+    if (s === 'Open')                       return { bg:'#FEF9E7', txt:'#7D6608' };
+    if (s === 'On Hold')                    return { bg:'#E8DAEF', txt:'#6C3483' };
+    if (s === 'CustomsPendingForDocuments') return { bg:'#FDEDEC', txt:'#922B21' };
+    return { bg:'#F4F6F8', txt:'#6B7A8D' };
+  };
+  const statusLabel = (s) => ({
+    'PackedNotShipped':'Packed Not Shipped',
+    'CustomsPendingForDocuments':'Customs Pending',
+  }[s] || s);
+
+  const fmt = v => { const n = parseFloat(v)||0; return n>0 ? n.toLocaleString() : '<span style="color:#ddd">—</span>'; };
+
+  const rows = pending.map((r, i) => {
+    const s   = (r['Status']||'').trim();
+    const sc  = statusColor(s);
+    const bg  = i % 2 === 0 ? '#fff' : '#F8FAFC';
+    return `<tr style="background:${bg}">
+      <td style="padding:7px 10px;font-size:11px;white-space:nowrap">
+        <span style="background:${sc.bg};color:${sc.txt};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">
+          ${statusLabel(s)}
+        </span>
+      </td>
+      <td style="padding:7px 10px;font-size:12px;font-weight:500;white-space:nowrap">${r['Order number']||'—'}</td>
+      <td style="padding:7px 10px;font-size:12px">${r['Country']||'—'}</td>
+      <td style="padding:7px 10px;font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['Customer']||'—'}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right">${fmt(r['Ordered'])}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;color:#185FA5">${fmt(r['Alloc.'])}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;color:#0E6655">${fmt(r['Picked'])}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:right;color:#145A32">${fmt(r['Packed'])}</td>
+    </tr>`;
+  }).join('');
+
+  const tot_ord = pending.reduce((s,r)=>s+(parseFloat(r['Ordered'])||0),0);
+  const tot_alc = pending.reduce((s,r)=>s+(parseFloat(r['Alloc.'])||0),0);
+  const tot_pck = pending.reduce((s,r)=>s+(parseFloat(r['Picked'])||0),0);
+  const tot_pad = pending.reduce((s,r)=>s+(parseFloat(r['Packed'])||0),0);
+
+  return `
+  <div class="divider">📋 Pending Orders — ${pending.length} order${pending.length>1?'s':''}</div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#F8FAFC;border-bottom:1px solid #E0E6EE">
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Status</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Order No.</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Country</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Customer</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Ordered</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Allocated</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Picked</th>
+            <th style="padding:7px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6B7A8D">Packed</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr style="background:#1B3A6B">
+            <td colspan="4" style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff">TOTAL (${pending.length} pending)</td>
+            <td style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff;text-align:right">${Math.round(tot_ord).toLocaleString()}</td>
+            <td style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff;text-align:right">${Math.round(tot_alc).toLocaleString()}</td>
+            <td style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff;text-align:right">${Math.round(tot_pck).toLocaleString()}</td>
+            <td style="padding:7px 10px;font-size:12px;font-weight:600;color:#fff;text-align:right">${Math.round(tot_pad).toLocaleString()}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>`;
+}
 </script>
 </body>
 </html>
