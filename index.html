@@ -116,58 +116,11 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #F0F3F7; colo
 
 <!-- UPLOAD -->
 <div id="upload-screen">
+  <!-- Auto-loads on page open — users never see this for long -->
   <div class="app-logo">📦 ITG Operations Dashboard</div>
-  <div class="app-sub">Connect your OneDrive folder or upload files manually.</div>
-
-  <!-- ── CONNECT FOLDER (OneDrive / local) ─────────────────────────────── -->
-  <div style="width:100%;max-width:680px;margin-bottom:20px">
-    <div style="background:#1B3A6B;border-radius:14px;padding:22px 26px">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div style="font-size:36px;line-height:1">📁</div>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:3px">Connect your ITG Dashboard folder</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.55);line-height:1.5">
-            Reads <code style="background:rgba(255,255,255,0.15);padding:1px 5px;border-radius:3px">Orders*.xlsx</code> and
-            <code style="background:rgba(255,255,255,0.15);padding:1px 5px;border-radius:3px">InOrders*.xlsx</code> — always picks the latest file
-          </div>
-          <div id="folder-status" style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:4px">Chrome or Edge required · Works with OneDrive synced folders</div>
-        </div>
-        <button id="connect-folder-btn" onclick="connectFolder()" style="
-          background:#fff;color:#1B3A6B;border:none;border-radius:8px;
-          padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;
-          white-space:nowrap;flex-shrink:0">
-          🔗 Connect Folder
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Divider -->
-  <div style="width:100%;max-width:680px;display:flex;align-items:center;gap:12px;margin-bottom:20px">
-    <div style="flex:1;height:1px;background:#E0E6EE"></div>
-    <span style="font-size:11px;color:#aaa;font-weight:500">or upload files manually</span>
-    <div style="flex:1;height:1px;background:#E0E6EE"></div>
-  </div>
-
-  <div class="upload-grid" style="grid-template-columns:1fr 1fr">
-    <div class="drop-zone" id="wms-drop" ondragover="handleDrag(event,'wms-drop')" ondragleave="handleDragLeave('wms-drop')" ondrop="handleDrop(event,'wms')">
-      <input type="file" accept=".xlsx,.xls" onchange="handleFile(event,'wms')">
-      <div class="drop-icon">🏭</div>
-      <div class="drop-label">WMS Orders File <span style="font-size:10px;color:#aaa;font-weight:400">(optional)</span></div>
-      <div class="drop-hint">Orders_xx.xlsx — contains WMS order data</div>
-      <div class="drop-filename" id="wms-fname"></div>
-    </div>
-    <div class="drop-zone" id="po-drop" ondragover="handleDrag(event,'po-drop')" ondragleave="handleDragLeave('po-drop')" ondrop="handleDrop(event,'po')">
-      <input type="file" accept=".xlsx,.xls" onchange="handleFile(event,'po')">
-      <div class="drop-icon">📦</div>
-      <div class="drop-label">PO Inbound File <span style="font-size:10px;color:#aaa;font-weight:400">(optional)</span></div>
-      <div class="drop-hint">InOrders_xx.xlsx — purchase order status / stock</div>
-      <div class="drop-filename" id="po-fname"></div>
-    </div>
-  </div>
-
-  <button class="run-btn" id="run-btn" disabled onclick="runDashboard()">Generate Dashboard</button>
-  <div id="upload-error"></div>
+  <div class="app-sub" id="load-status">Loading latest data...</div>
+  <div style="width:44px;height:44px;border:4px solid #EBF3FC;border-top-color:#2E6DB4;border-radius:50%;animation:spin .8s linear infinite;margin-top:20px"></div>
+  <div id="upload-error" style="margin-top:20px;max-width:500px;text-align:center"></div>
 </div>
 
 <!-- PROCESSING -->
@@ -185,7 +138,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #F0F3F7; colo
       <div id="last-updated" style="font-size:10px;color:#aaa;margin-top:2px"></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <button id="refresh-btn" onclick="refreshFromFolder()" style="display:none;
+      <button id="refresh-btn" onclick="refreshDashboard()" style="display:none;
         background:#1B3A6B;color:#fff;border:none;border-radius:8px;
         padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer">
         🔄 Refresh
@@ -205,6 +158,20 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #F0F3F7; colo
 
 <script>
 let files = { wms: null, po: null };
+// ════════════════════════════════════════════════════════════════════════
+// GITHUB CONFIG — update these if you rename the repo or files
+// ════════════════════════════════════════════════════════════════════════
+const GITHUB_USER   = 'vinodaiexpert';
+const GITHUB_REPO   = 'ITG-Dashboard';
+const GITHUB_BRANCH = 'main';
+const WMS_FILE_NAME = 'Orders_latest.xlsx';
+const PO_FILE_NAME  = 'InOrders_latest.xlsx';
+
+function githubRawUrl(filename) {
+  // Cache-bust with timestamp so browser always fetches fresh file
+  return `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${filename}?t=${Date.now()}`;
+}
+
 let charts = [];
 let _wmsRaw = null; // stored globally so order type selector can re-process without re-uploading
 const FULFILLED = ['Collected', 'CustomsCleared']; // treated as shipped
@@ -337,7 +304,8 @@ async function runDashboard() {
     show('upload-screen');
     document.getElementById('upload-error').innerHTML =
       `<div style="margin-top:14px;background:#FDEDEC;border-radius:10px;padding:12px 16px;font-size:12px;color:#922B21;max-width:680px">
-        ⚠️ Error processing files: ${err.message}. Please check you uploaded the correct Excel files.
+        ⚠️ Error: ${err.message}
+        <button onclick="loadFromGitHub()" style="margin-left:12px;background:#1B3A6B;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:11px;cursor:pointer">Retry</button>
       </div>`;
   }
 }
@@ -1939,6 +1907,98 @@ async function readExcelFile(file) {
     reader.readAsArrayBuffer(file);
   });
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// AUTO-LOAD FROM GITHUB — runs on page open, no user action needed
+// ════════════════════════════════════════════════════════════════════════
+
+async function readExcelFromUrl(url, label) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`${label} not found (${resp.status})`);
+  const buf  = await resp.arrayBuffer();
+  const wb   = XLSX.read(buf, { type: 'array', cellDates: true });
+  // Pick best sheet (same logic as readExcel)
+  let best = null, bestScore = -1;
+  wb.SheetNames.forEach(name => {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
+    let score = rows.length;
+    if (rows.length > 0) {
+      const keys = Object.keys(rows[0]);
+      const named = keys.filter(k => k && !/^(__EMPTY|Unnamed)/i.test(k)).length;
+      if (named < 2) score = 0;
+    }
+    if (/^data$/i.test(name) && rows.length > 0) score += 100000;
+    if (score > bestScore) { bestScore = score; best = rows; }
+  });
+  return best || [];
+}
+
+async function loadFromGitHub() {
+  const statusEl = document.getElementById('load-status');
+  const errorEl  = document.getElementById('upload-error');
+  try {
+    statusEl.textContent = 'Fetching WMS Outbound data...';
+    const wmsRaw = await readExcelFromUrl(githubRawUrl(WMS_FILE_NAME), 'WMS file');
+
+    statusEl.textContent = 'Fetching PO Inbound data...';
+    const poRaw  = await readExcelFromUrl(githubRawUrl(PO_FILE_NAME),  'PO file');
+
+    statusEl.textContent = 'Building dashboard...';
+    await new Promise(r => setTimeout(r, 200));
+
+    // Run dashboard pipeline — identical to manual upload flow
+    _wmsRaw = wmsRaw;
+    if (wmsRaw && wmsRaw.length) {
+      renderOutboundWithTypeSelector(wmsRaw);
+    } else {
+      document.getElementById('dash-content').innerHTML =
+        '<div style="padding:50px;text-align:center;color:#aaa">No WMS data found.</div>';
+    }
+
+    if (poRaw && poRaw.length) {
+      renderPO(processPO(poRaw));
+    } else {
+      document.getElementById('po-content').innerHTML =
+        '<div style="padding:50px;text-align:center;color:#aaa">No PO Inbound data found.</div>';
+    }
+
+    // Update last-updated timestamp
+    const now = new Date();
+    document.getElementById('last-updated').textContent =
+      `Refreshed: ${now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})} ${now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
+
+    // Show refresh button
+    document.getElementById('refresh-btn').style.display = 'inline-flex';
+
+    show('dashboard-screen');
+
+  } catch (err) {
+    // Show friendly error
+    errorEl.innerHTML = `
+      <div style="background:#FDEDEC;border-radius:12px;padding:20px 24px;font-size:13px;color:#922B21">
+        <div style="font-weight:600;margin-bottom:6px">⚠️ Could not load data</div>
+        <div style="font-size:12px;opacity:.8;margin-bottom:12px">${err.message}</div>
+        <div style="font-size:11px;color:#7D6608;background:#FEF9E7;padding:10px 14px;border-radius:8px;line-height:1.6">
+          Make sure <strong>${WMS_FILE_NAME}</strong> and <strong>${PO_FILE_NAME}</strong>
+          are uploaded to the GitHub repository:<br>
+          <code style="font-size:10px">github.com/${GITHUB_USER}/${GITHUB_REPO}</code>
+        </div>
+        <button onclick="loadFromGitHub()" style="margin-top:12px;background:#1B3A6B;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:600;cursor:pointer">
+          🔄 Try Again
+        </button>
+      </div>`;
+    statusEl.textContent = 'Failed to load data.';
+  }
+}
+
+async function refreshDashboard() {
+  show('processing-screen');
+  document.getElementById('proc-text').textContent = 'Refreshing data from GitHub...';
+  await loadFromGitHub();
+}
+
+// Auto-load when page opens
+window.addEventListener('load', loadFromGitHub);
 </script>
 </body>
 </html>
