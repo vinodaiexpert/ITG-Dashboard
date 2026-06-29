@@ -414,10 +414,10 @@ function processWMS(raw, orderType = 'Shopify Order') {
   // Store raw rows for B2B detail table (used by buildB2BOrderTable)
   const _b2bRows = clean;
 
-  // Transporter breakdown
+  // Terms of delivery breakdown
   const transporterMap = {};
   clean.forEach(r => {
-    const t = ((r['Transporter'] || '').toString().trim()) || 'Unknown';
+    const t = ((r['Terms of delivery'] || '').toString().trim()) || 'Unknown';
     if (!transporterMap[t]) transporterMap[t] = { total: 0, collected: 0 };
     transporterMap[t].total++;
     if (FULFILLED.includes((r['Status'] || '').toString().trim())) transporterMap[t].collected++;
@@ -612,10 +612,10 @@ function buildCountryRows(wms) {
 function buildTransporterCustomerWidget(wms) {
   if (!wms._b2bRows || !wms._b2bRows.length) return '';
 
-  // Group: transporter → customer → { total, collected }
+  // Group: terms of delivery → customer → { total, collected }
   const map = {};
   wms._b2bRows.forEach(r => {
-    const t = ((r['Transporter'] || '').toString().trim()) || 'Unknown';
+    const t = ((r['Terms of delivery'] || '').toString().trim()) || 'Unknown';
     const c = ((r['Customer']   || '').toString().trim()) || 'Unknown';
     if (!map[t]) map[t] = { customers: {}, total: 0 };
     if (!map[t].customers[c]) map[t].customers[c] = { total: 0, collected: 0 };
@@ -655,7 +655,7 @@ function buildTransporterCustomerWidget(wms) {
     }).join('');
 
   return `
-  <div class="divider">🚚 Customers by transporter</div>
+  <div class="divider">📋 Customers by terms of delivery</div>
   <div class="card" style="margin-bottom:14px">${sections}</div>`;
 }
 
@@ -787,7 +787,7 @@ function buildHTML(wms, returns, orderType = 'Shopify Order') {
     </div>
   </div>
 
-  <!-- Customers by transporter (B2B only) -->
+  <!-- Customers by terms of delivery (B2B only) -->
   ${isB2B ? buildTransporterCustomerWidget(wms) : ''}
 
   <!-- Pending orders table for B2C / B2B order detail table -->
