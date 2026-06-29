@@ -110,6 +110,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #F0F3F7; colo
 .tbl .num { text-align: right; font-weight: 500; }
 .badge { display: inline-block; padding: 1px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
 @media(max-width:640px) { .upload-grid,.g4,.g3,.g2,.an-grid2,.an-grid3 { grid-template-columns: 1fr; } }
+details summary { outline: none; }
+details summary::-webkit-details-marker { display: none; }
+details[open] .acc-arrow { transform: rotate(90deg); }
+.acc-arrow { display: inline-block; transition: transform .2s; font-size: 10px; color: #aaa; }
 </style>
 </head>
 <body>
@@ -621,6 +625,7 @@ function buildTransporterCustomerWidget(wms) {
   const sections = Object.entries(map)
     .sort((a, b) => b[1].total - a[1].total)
     .map(([transporter, grp]) => {
+      const customerCount = Object.keys(grp.customers).length;
       const custRows = Object.entries(grp.customers)
         .map(([name, v]) => ({ name, ...v, pct: v.total > 0 ? (v.collected / v.total * 100).toFixed(1) : '0.0' }))
         .sort((a, b) => b.total - a.total)
@@ -628,20 +633,23 @@ function buildTransporterCustomerWidget(wms) {
           const pct = parseFloat(c.pct);
           const barColor = pct >= 70 ? '#1D9E75' : pct >= 40 ? '#EF9F27' : '#E24B4A';
           const txtColor = pct >= 70 ? '#145A32' : pct >= 40 ? '#BA7517' : '#922B21';
-          return `<div class="cr">
+          return `<div class="cr" style="padding-left:8px">
             <span style="flex:1;font-size:12px">${c.name}</span>
             <span style="color:#aaa;font-size:10px;min-width:50px;text-align:right">${c.total} orders</span>
             <div class="br" style="width:62px"><div class="bf" style="background:${barColor};width:${Math.min(pct,100)}%"></div></div>
             <span style="min-width:38px;text-align:right;font-weight:600;font-size:12px;color:${txtColor}">${c.pct}%</span>
           </div>`;
         }).join('');
-      return `<div style="margin-bottom:16px">
-        <div style="font-size:12px;font-weight:600;color:#1B3A6B;padding:5px 0 7px;border-bottom:2px solid #E0E6EE;margin-bottom:6px;display:flex;align-items:center;gap:6px">
-          <span>🚚</span><span>${transporter}</span>
-          <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:4px">${grp.total} orders</span>
-        </div>
-        ${custRows}
-      </div>`;
+      return `<details style="border-bottom:1px solid #F0F2F5">
+        <summary style="display:flex;align-items:center;gap:8px;padding:11px 4px;cursor:pointer;list-style:none;user-select:none">
+          <span class="acc-arrow">▶</span>
+          <span style="font-size:13px">🚚</span>
+          <span style="flex:1;font-size:13px;font-weight:600;color:#1B3A6B">${transporter}</span>
+          <span style="background:#EBF3FC;color:#185FA5;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">${customerCount} customer${customerCount !== 1 ? 's' : ''}</span>
+          <span style="background:#F0F2F5;color:#6B7A8D;padding:2px 9px;border-radius:20px;font-size:11px">${grp.total} orders</span>
+        </summary>
+        <div style="padding:4px 0 10px">${custRows}</div>
+      </details>`;
     }).join('');
 
   return `
@@ -774,7 +782,6 @@ function buildHTML(wms, returns, orderType = 'Shopify Order') {
     <div class="card">
       <p class="slbl">Country fulfilment</p>
       ${buildCountryRows(wms)}
-      ${isB2B ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #F0F2F5"><p class="slbl" style="margin-bottom:8px">By transporter</p>${buildTransporterRows(wms)}</div>` : ''}
     </div>
   </div>
 
