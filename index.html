@@ -153,11 +153,12 @@ details[open] .acc-arrow { transform: rotate(90deg); }
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('tab-main',this)">📊 Outbound</button>
     <button class="tab-btn" onclick="switchTab('tab-po',this)">📦 Inbound PO</button>
+    <button class="tab-btn" onclick="switchTab('tab-returns',this)">↩ Returns</button>
   </div>
   <div id="tab-main" class="tab-panel active"><div id="dash-content"></div></div>
   <div id="tab-po" class="tab-panel"><div id="po-content"></div></div>
   <div id="tab-analysis" class="tab-panel" style="display:none"><div id="analysis-content"></div></div>
-  <div id="tab-returns" class="tab-panel" style="display:none"><div id="returns-content"></div></div>
+  <div id="tab-returns" class="tab-panel"><div id="returns-content"></div></div>
 </div>
 
 <script>
@@ -168,8 +169,9 @@ let files = { wms: null, po: null };
 const GITHUB_USER   = 'vinodaiexpert';
 const GITHUB_REPO   = 'ITG-Dashboard';
 const GITHUB_BRANCH = 'main';
-const WMS_FILE_NAME = 'Orders_latest.xlsx';
-const PO_FILE_NAME  = 'InOrders_latest.xlsx';
+const WMS_FILE_NAME     = 'Orders_latest.xlsx';
+const PO_FILE_NAME      = 'InOrders_latest.xlsx';
+const RETURNS_FILE_NAME = 'ReturnOrders.xlsx';
 
 function githubRawUrl(filename) {
   // Cache-bust with timestamp so browser always fetches fresh file
@@ -1854,10 +1856,11 @@ async function loadAndRunFromFolder(handle) {
   try {
     setProc('Scanning folder...');
 
-    // Find latest WMS and PO files by prefix
-    const [wmsFile, poFile] = await Promise.all([
+    // Find latest WMS, PO, and Returns files by prefix
+    const [wmsFile, poFile, returnsFile] = await Promise.all([
       getLatestFile(handle, 'Orders'),
       getLatestFile(handle, 'InOrders'),
+      getLatestFile(handle, 'ReturnOrders'),
     ]);
 
     let wmsFound = wmsFile ? wmsFile.name : null;
@@ -1872,7 +1875,7 @@ async function loadAndRunFromFolder(handle) {
       return;
     }
 
-    let wmsRaw = null, poRaw = null;
+    let wmsRaw = null, poRaw = null, returnsRaw = null;
     if (wmsFile) {
       setProc(`Reading ${wmsFound}...`);
       wmsRaw = await readExcelFile(wmsFile);
@@ -1880,6 +1883,10 @@ async function loadAndRunFromFolder(handle) {
     if (poFile) {
       setProc(`Reading ${poFound}...`);
       poRaw = await readExcelFile(poFile);
+    }
+    if (returnsFile) {
+      setProc(`Reading ${returnsFile.name}...`);
+      returnsRaw = await readExcelFile(returnsFile);
     }
 
     setProc('Building dashboard...');
@@ -1909,6 +1916,13 @@ async function loadAndRunFromFolder(handle) {
     } else {
       document.getElementById('po-content').innerHTML =
         '<div style="padding:50px;text-align:center;color:#aaa;font-size:13px">No PO Inbound file found in folder.</div>';
+    }
+
+    if (returnsRaw && returnsRaw.length) {
+      renderReturns(processReturns(returnsRaw));
+    } else {
+      document.getElementById('returns-content').innerHTML =
+        '<div style="padding:50px;text-align:center;color:#aaa;font-size:13px">No ReturnOrders file found in folder.</div>';
     }
 
     show('dashboard-screen');
@@ -2025,6 +2039,10 @@ async function loadFromGitHub() {
     statusEl.textContent = 'Fetching PO Inbound data...';
     const poRaw  = await readExcelFromUrl(githubRawUrl(PO_FILE_NAME),  'PO file');
 
+    statusEl.textContent = 'Fetching Returns data...';
+    let returnsRaw = [];
+    try { returnsRaw = await readExcelFromUrl(githubRawUrl(RETURNS_FILE_NAME), 'Returns file'); } catch(e) {}
+
     statusEl.textContent = 'Building dashboard...';
     await new Promise(r => setTimeout(r, 200));
 
@@ -2042,6 +2060,13 @@ async function loadFromGitHub() {
     } else {
       document.getElementById('po-content').innerHTML =
         '<div style="padding:50px;text-align:center;color:#aaa">No PO Inbound data found.</div>';
+    }
+
+    if (returnsRaw && returnsRaw.length) {
+      renderReturns(processReturns(returnsRaw));
+    } else {
+      document.getElementById('returns-content').innerHTML =
+        '<div style="padding:50px;text-align:center;color:#aaa;font-size:13px">No returns data found. Upload ReturnOrders.xlsx to GitHub.</div>';
     }
 
     // Update last-updated timestamp
