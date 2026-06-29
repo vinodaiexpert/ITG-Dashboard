@@ -408,10 +408,26 @@ function processWMS(raw, orderType = 'Shopify Order') {
   // Store raw rows for B2B detail table (used by buildB2BOrderTable)
   const _b2bRows = clean;
 
+  // Transporter breakdown
+  const transporterMap = {};
+  clean.forEach(r => {
+    const t = ((r['Transporter'] || '').toString().trim()) || 'Unknown';
+    if (!transporterMap[t]) transporterMap[t] = { total: 0, collected: 0 };
+    transporterMap[t].total++;
+    if (FULFILLED.includes((r['Status'] || '').toString().trim())) transporterMap[t].collected++;
+  });
+  const transporters = Object.entries(transporterMap)
+    .map(([name, v]) => ({
+      name, orders: v.total, shipped: v.collected,
+      pending: v.total - v.collected,
+      pct: v.total > 0 ? (v.collected / v.total * 100).toFixed(1) : '0.0'
+    }))
+    .sort((a, b) => b.orders - a.orders);
+
   return {
     totalActive, collected, pending: pending.length, onHoldCount, fulfilmentPct, totalUnits,
     statusCounts, countries, pendingDates, criticalPending, cancCount,
-    uniqueCountries, reportDateStr, topCountries, reportDate, _b2bRows
+    uniqueCountries, reportDateStr, topCountries, reportDate, _b2bRows, transporters
   };
 }
 
@@ -587,6 +603,21 @@ function buildCountryRows(wms) {
   }).join('');
 }
 
+function buildTransporterRows(wms) {
+  if (!wms.transporters || !wms.transporters.length) return '<div style="font-size:12px;color:#aaa;padding:8px 0">No transporter data available.</div>';
+  return wms.transporters.map(t => {
+    const pct = parseFloat(t.pct);
+    const barColor = pct >= 70 ? '#1D9E75' : pct >= 40 ? '#EF9F27' : '#E24B4A';
+    const txtColor = pct >= 70 ? '#145A32' : pct >= 40 ? '#BA7517' : '#922B21';
+    return `<div class="cr">
+      <span style="flex:1;font-size:12px">${t.name}</span>
+      <span style="color:#aaa;font-size:10px;min-width:50px;text-align:right">${t.orders} orders</span>
+      <div class="br" style="width:62px"><div class="bf" style="background:${barColor};width:${Math.min(pct,100)}%"></div></div>
+      <span style="min-width:38px;text-align:right;font-weight:600;font-size:12px;color:${txtColor}">${t.pct}%</span>
+    </div>`;
+  }).join('');
+}
+
 function buildTopItems(sales) {
   const goldColors = ['#FEF9E7:#B7860B','#F5F5F5:#707070','#FDF0E6:#7D4010'];
   return sales.topItems.map((item, i) => {
@@ -697,6 +728,7 @@ function buildHTML(wms, returns, orderType = 'Shopify Order') {
     <div class="card">
       <p class="slbl">Country fulfilment</p>
       ${buildCountryRows(wms)}
+      ${isB2B ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #F0F2F5"><p class="slbl" style="margin-bottom:8px">By transporter</p>${buildTransporterRows(wms)}</div>` : ''}
     </div>
   </div>
 
