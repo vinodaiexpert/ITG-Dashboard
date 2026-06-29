@@ -603,6 +603,52 @@ function buildCountryRows(wms) {
   }).join('');
 }
 
+function buildTransporterCustomerWidget(wms) {
+  if (!wms._b2bRows || !wms._b2bRows.length) return '';
+
+  // Group: transporter → customer → { total, collected }
+  const map = {};
+  wms._b2bRows.forEach(r => {
+    const t = ((r['Transporter'] || '').toString().trim()) || 'Unknown';
+    const c = ((r['Customer']   || '').toString().trim()) || 'Unknown';
+    if (!map[t]) map[t] = { customers: {}, total: 0 };
+    if (!map[t].customers[c]) map[t].customers[c] = { total: 0, collected: 0 };
+    map[t].customers[c].total++;
+    map[t].total++;
+    if (FULFILLED.includes((r['Status'] || '').toString().trim())) map[t].customers[c].collected++;
+  });
+
+  const sections = Object.entries(map)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([transporter, grp]) => {
+      const custRows = Object.entries(grp.customers)
+        .map(([name, v]) => ({ name, ...v, pct: v.total > 0 ? (v.collected / v.total * 100).toFixed(1) : '0.0' }))
+        .sort((a, b) => b.total - a.total)
+        .map(c => {
+          const pct = parseFloat(c.pct);
+          const barColor = pct >= 70 ? '#1D9E75' : pct >= 40 ? '#EF9F27' : '#E24B4A';
+          const txtColor = pct >= 70 ? '#145A32' : pct >= 40 ? '#BA7517' : '#922B21';
+          return `<div class="cr">
+            <span style="flex:1;font-size:12px">${c.name}</span>
+            <span style="color:#aaa;font-size:10px;min-width:50px;text-align:right">${c.total} orders</span>
+            <div class="br" style="width:62px"><div class="bf" style="background:${barColor};width:${Math.min(pct,100)}%"></div></div>
+            <span style="min-width:38px;text-align:right;font-weight:600;font-size:12px;color:${txtColor}">${c.pct}%</span>
+          </div>`;
+        }).join('');
+      return `<div style="margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:#1B3A6B;padding:5px 0 7px;border-bottom:2px solid #E0E6EE;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span>🚚</span><span>${transporter}</span>
+          <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:4px">${grp.total} orders</span>
+        </div>
+        ${custRows}
+      </div>`;
+    }).join('');
+
+  return `
+  <div class="divider">🚚 Customers by transporter</div>
+  <div class="card" style="margin-bottom:14px">${sections}</div>`;
+}
+
 function buildTransporterRows(wms) {
   if (!wms.transporters || !wms.transporters.length) return '<div style="font-size:12px;color:#aaa;padding:8px 0">No transporter data available.</div>';
   return wms.transporters.map(t => {
@@ -731,6 +777,9 @@ function buildHTML(wms, returns, orderType = 'Shopify Order') {
       ${isB2B ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #F0F2F5"><p class="slbl" style="margin-bottom:8px">By transporter</p>${buildTransporterRows(wms)}</div>` : ''}
     </div>
   </div>
+
+  <!-- Customers by transporter (B2B only) -->
+  ${isB2B ? buildTransporterCustomerWidget(wms) : ''}
 
   <!-- Pending orders table for B2C / B2B order detail table -->
   ${isB2B ? buildB2BOrderTable(wms) : buildB2CPendingTable(wms)}
